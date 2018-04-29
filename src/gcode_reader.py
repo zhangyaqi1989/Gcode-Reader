@@ -57,7 +57,8 @@ class GcodeReader:
         self.n_segs = 0
         self.segs = None
         self.n_layers = 0
-        self.index_bars = []
+        self.seg_index_bars = []
+        self.subpath_index_bars = []
         self.summary = None
         self.lengths = None
         self.subpaths = None
@@ -68,6 +69,8 @@ class GcodeReader:
         """ read the file and stores segs into data structure """
         if self.filetype == GcodeType.FDM_REGULAR:
             self._read_fdm_regular()
+        elif self.filetype == GcodeType.FDM_STRATASYS:
+            self._read_fdm_stratasys()
         else:
             print("file type is not supported")
             sys.exit(1)
@@ -91,7 +94,7 @@ class GcodeReader:
                 gxyzef[d[token[0]]] = float(token[1:])
             if gxyzef[3] > old_gxyzef[3]:
                 self.n_layers += 1
-                self.index_bars.append(i)
+                self.seg_index_bars.append(i)
             if (gxyzef[0] == 1 and gxyzef[1:3] != old_gxyzef[1:3]
                     and gxyzef[3] == old_gxyzef[3]
                     and gxyzef[4] > old_gxyzef[4]):
@@ -100,8 +103,53 @@ class GcodeReader:
                 self.segs.append((x0, y0, x1, y1, z))
         self.n_segs = len(self.segs)
         self.segs = np.array(self.segs)
-        self.index_bars.append(self.n_segs)
-        assert(len(self.index_bars) - self.n_layers == 1)
+        self.seg_index_bars.append(self.n_segs)
+        assert(len(self.seg_index_bars) - self.n_layers == 1)
+
+    def _read_fdm_stratasys(self):
+        """ read stratasys fdm G-code file """
+        self.areas = []
+        self.is_supports = []
+        self.styles = []
+        self.deltTs = []
+        self.segs = []
+        temp = -float('inf')
+        # x, y, z, area, deltaT, is_support, style
+        xyzATPS = [temp, temp, temp, temp, temp, False, '']
+        line_count = 0
+        with open(self.filename, 'r') as in_file:
+            lines = in_file.readlines()
+            # means position denoted by the line is the start of subpath
+            is_start = True
+            for line in lines:
+                if line.startswith('#'):
+                    continue
+                if not line.strip(): # skip empty line
+                    start = True
+                    continue
+                old_xyzATPS = xyzATPS[:]
+                tokens = line.split()
+                # print(tokens)
+                xyzATPS[:5] = [float(token) for token in tokens[:5]]
+                xyzATPS[5] = bool(tokens[5])
+                xyzATPS[6] = tokens[6]
+                if xyzATPS[2] != old_xyzATPS[2]: # z value
+                    self.seg_index_bars.append(line_count)
+                    self.n_layers += 1
+                elif not start:
+                    # make sure is_support and style do not change
+                    assert(xyzATPS[5:] == old_xyzATPS[5:])
+                    x0, y0 = old_xyzATPS[:2]
+                    x1, y1, z = xyzATPS[:3]
+                    self.segs.append((x0, y0, x1, y1, z))
+                    self.areas.append(xyzATPS[3])
+                    self.deltTs.append(xyzATPS[4])
+                    self.is_supports.append(xyzATPS[5])
+                    self.styles.append(xyzATPS[6])
+                start = False
+                line_count += 1
+            self.segs = np.array(self.segs)
+            # print(self.seg_index_bars)
 
     def _compute_subpaths(self):
         """ compute subpaths
@@ -109,9 +157,13 @@ class GcodeReader:
         """
         if not self.subpaths:
             self.subpaths = []
+            self.subpath_index_bars = []
             x0, y0, x1, y1, z = self.segs[0, :]
             xs, ys, zs = [x0, x1], [y0, y1], [z, z]
             for x0, y0, x1, y1, z in self.segs[1:, :]:
+                # print('{:0.10f}, {:0.10f}, {}'.format(z, zs[-1], z != zs[-1]))
+                if z != zs[-1]:
+                    self.subpath_index_bars.append(len(self.subpaths))
                 if x0 != xs[-1] or y0 != ys[-1] or z != zs[-1]:
                     self.subpaths.append((xs, ys, zs))
                     xs, ys, zs = [x0, x1], [y0, y1], [z, z]
@@ -121,6 +173,8 @@ class GcodeReader:
                     zs.append(z)
             if len(xs) != 0:
                 self.subpaths.append((xs, ys, zs))
+            self.subpath_index_bars.append(len(self.subpaths))
+            print(self.subpath_index_bars)
 
     def plot(self, color='blue'):
         """ plot the whole part in 3D """
@@ -140,7 +194,10 @@ class GcodeReader:
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111)
         self._compute_subpaths()
-        left, right = self.index_bars[layer - 1], self.index_bars[layer]
+        # this is a bug
+        # left, right = self.seg_index_bars[layer - 1], self.seg_index_bars[layer]
+        left, right = (self.subpath_index_bars[layer - 1],
+                    self.subpath_index_bars[layer])
         for xs, ys, _ in self.subpaths[left: right]:
             ax.plot(xs, ys)
         plt.show()
