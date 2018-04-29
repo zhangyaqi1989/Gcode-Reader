@@ -8,40 +8,67 @@
 ##################################
 
 # standard library
+import math
 import os.path
 import sys
 import argparse
+from enum import Enum
 import pprint
 
 # third party library
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import pandas as pd
 
 pp = pprint.PrettyPrinter(indent=4)
+
+
+class GcodeType(Enum):
+    """ enum of GcodeType """
+
+    FDM_REGULAR = 1
+    FDM_STRATASYS = 2
+    LPBF = 3
+
+    @classmethod
+    def has_value(cls, value):
+        return any(value == item.value for item in cls)
 
 
 class GcodeReader:
     """ Gcode reader class """
 
-    def __init__(self, filename, filetype="default"):
+    def __init__(self, filename, filetype=GcodeType.FDM_REGULAR):
         if not os.path.exists(filename):
             print("{} does not exist!".format(filename))
             sys.exit(1)
         self.filename = filename
         self.filetype = filetype
+        # print(self.filetype)
         self.n_segs = 0
         self.segs = None
         self.n_layers = 0
         self.index_bars = []
+        self.summary = None
+        self.lengths = None
+        # read file to populate variables
         self._read()
 
     def _read(self):
         """ read the file and stores segs into data structure """
+        if self.filetype == GcodeType.FDM_REGULAR:
+            self._read_fdm_regular()
+        else:
+            print("file type is not supported")
+            sys.exit(1)
+
+    def _read_fdm_regular(self):
+        """ read fDM regular gcode type """
         with open(self.filename) as infile:
             # read nonempty lines
             lines = [line.strip() for line in infile.readlines()
-                     if line.strip()]
+                    if line.strip()]
             # only keep line that starts with 'G1'
             lines = [line for line in lines if line.startswith('G1')]
         # pp.pprint(lines) # for debug
@@ -57,7 +84,7 @@ class GcodeReader:
                 self.n_layers += 1
                 self.index_bars.append(i)
             if (gxyzef[0] == 1 and gxyzef[1:3] != old_gxyzef[1:3]
-                and gxyzef[3] == old_gxyzef[3]
+                    and gxyzef[3] == old_gxyzef[3]
                     and gxyzef[4] > old_gxyzef[4]):
                 x0, y0, z = old_gxyzef[1:4]
                 x1, y1, _ = gxyzef[1:4]
@@ -96,7 +123,7 @@ class GcodeReader:
         left, right = self.index_bars[layer - 1], self.index_bars[layer]
         x0, y0, x1, y1, _ = self.segs[left, :]
         xs, ys = [x0, x1], [y0, y1]
-        for x0, y0, x1, y1, _ in self.segs[left + 1 : right, :]:
+        for x0, y0, x1, y1, _ in self.segs[left + 1: right, :]:
             if x0 != xs[-1] or y0 != ys[-1]:
                 ax.plot(xs, ys)
                 xs, ys = [x0, x1], [y0, y1]
@@ -107,14 +134,34 @@ class GcodeReader:
             ax.plot(xs, ys)
         plt.show()
 
+    def describe(self):
+        if not self.summary:
+            self.lengths = [math.hypot(x1 - x0, y1 - y0) for x0, y0, x1, y1, _
+                    in self.segs]
+            series = pd.Series(self.lengths)
+            self.summary = series.describe()
+        print("1. Line segments information: ")
+        print(self.summary)
+
 
 def command_line_runner():
     """ main function """
     parser = argparse.ArgumentParser(description='Gcode Reader')
     parser.add_argument(dest='gcode_file', help='gcode file', action='store')
+    parser.add_argument('-t', dest='filetype', help='file type: ',
+                        type=int, action='store')
     args = parser.parse_args()
-    gcode_reader = GcodeReader(args.gcode_file)
-    gcode_reader.plot_layer(layer=2)
+    if not GcodeType.has_value(args.filetype):
+        print('Invalid G-code file type: {:d}'.format(args.filetype))
+        print('Valid types are listed below')
+        for gcode_type in GcodeType:
+            print('{:s} : {:d}'.format(gcode_type.name, gcode_type.value))
+        sys.exit(1)
+    else:
+        filetype = GcodeType(args.filetype)
+    gcode_reader = GcodeReader(filename=args.gcode_file, filetype=filetype)
+    gcode_reader.describe()
+    gcode_reader.plot_layer(layer=1)
     # gcode_reader.plot()
 
 
