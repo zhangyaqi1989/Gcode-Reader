@@ -11,8 +11,10 @@
 # 2. number of nozzle travels
 # 3. total distance
 # 4. number of elements in each layer
-# 5. support stratasys file
+# 5. support stratasys file (done)
 # 6. support LPBF file
+# 7. create functions plot multiple
+# layers (done)
 ##################################
 
 # standard library
@@ -30,6 +32,11 @@ from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 
 pp = pprint.PrettyPrinter(indent=4)
+
+
+class LayerError(Exception):
+    """ layer number error """
+    pass
 
 
 class GcodeType(Enum):
@@ -71,9 +78,46 @@ class GcodeReader:
             self._read_fdm_regular()
         elif self.filetype == GcodeType.FDM_STRATASYS:
             self._read_fdm_stratasys()
+        elif self.filetype == GcodeType.LPBF:
+            self._read_lpbf()
         else:
             print("file type is not supported")
             sys.exit(1)
+
+    def _read_lpbf(self):
+        """ read LPBF gcode """
+        with open(self.filename) as infile:
+            # read nonempty lines
+            lines = [line.strip() for line in infile.readlines()
+                    if line.strip()]
+            # only keep line that starts with 'N'
+            lines = [line for line in lines if line.startswith('N')]
+        # pp.pprint(lines) # for debug
+        self.segs = []
+        self.powers = []
+        temp = -float('inf')
+        ngxyzfl = [temp, temp, temp, temp, temp, temp, temp]
+        d = dict(zip(['N', 'G', 'X', 'Y', 'Z', 'F', 'L'], range(7)))
+        for idx, line in enumerate(lines):
+            old_ngxyzfl = ngxyzfl[:]
+            tokens = line.split()
+            for token in tokens:
+                ngxyzfl[d[token[0]]] = float(token[1:])
+            if ngxyzfl[d['Z']] > old_ngxyzfl[d['Z']]:
+                self.n_layers += 1
+                self.seg_index_bars.append(idx)
+            if (ngxyzfl[1] == 1 and ngxyzfl[2:4] != old_ngxyzfl[2:4]
+                    and ngxyzfl[4] == old_ngxyzfl[4]
+                    and ngxyzfl[5] > 0):
+                x0, y0, z = old_ngxyzfl[2:5]
+                x1, y1 = ngxyzfl[2:4]
+                self.segs.append((x0, y0, x1, y1, z))
+        self.n_segs = len(self.segs)
+        self.segs = np.array(self.segs)
+        self.seg_index_bars.append(self.n_segs)
+        # print(self.n_layers)
+        assert(len(self.seg_index_bars) - self.n_layers == 1)
+
 
     def _read_fdm_regular(self):
         """ read fDM regular gcode type """
@@ -88,18 +132,18 @@ class GcodeReader:
         temp = -float('inf')
         gxyzef = [temp, temp, temp, temp, temp, temp]
         d = dict(zip(['G', 'X', 'Y', 'Z', 'E', 'F'], range(6)))
-        for i, line in enumerate(lines):
+        for idx, line in enumerate(lines):
             old_gxyzef = gxyzef[:]
             for token in line.split():
                 gxyzef[d[token[0]]] = float(token[1:])
-            if gxyzef[3] > old_gxyzef[3]:
+            if gxyzef[3] > old_gxyzef[3]: # z value
                 self.n_layers += 1
-                self.seg_index_bars.append(i)
+                self.seg_index_bars.append(idx)
             if (gxyzef[0] == 1 and gxyzef[1:3] != old_gxyzef[1:3]
                     and gxyzef[3] == old_gxyzef[3]
                     and gxyzef[4] > old_gxyzef[4]):
                 x0, y0, z = old_gxyzef[1:4]
-                x1, y1, _ = gxyzef[1:4]
+                x1, y1 = gxyzef[1:3]
                 self.segs.append((x0, y0, x1, y1, z))
         self.n_segs = len(self.segs)
         self.segs = np.array(self.segs)
@@ -124,7 +168,7 @@ class GcodeReader:
             for line in lines:
                 if line.startswith('#'):
                     continue
-                if not line.strip(): # skip empty line
+                if not line.strip():  # skip empty line
                     start = True
                     continue
                 old_xyzATPS = xyzATPS[:]
@@ -133,7 +177,7 @@ class GcodeReader:
                 xyzATPS[:5] = [float(token) for token in tokens[:5]]
                 xyzATPS[5] = bool(tokens[5])
                 xyzATPS[6] = tokens[6]
-                if xyzATPS[2] != old_xyzATPS[2]: # z value
+                if xyzATPS[2] != old_xyzATPS[2]:  # z value
                     self.seg_index_bars.append(line_count)
                     self.n_layers += 1
                 elif not start:
@@ -157,15 +201,14 @@ class GcodeReader:
         """
         if not self.subpaths:
             self.subpaths = []
-            self.subpath_index_bars = []
+            self.subpath_index_bars = [0]
             x0, y0, x1, y1, z = self.segs[0, :]
             xs, ys, zs = [x0, x1], [y0, y1], [z, z]
             for x0, y0, x1, y1, z in self.segs[1:, :]:
-                # print('{:0.10f}, {:0.10f}, {}'.format(z, zs[-1], z != zs[-1]))
-                if z != zs[-1]:
-                    self.subpath_index_bars.append(len(self.subpaths))
                 if x0 != xs[-1] or y0 != ys[-1] or z != zs[-1]:
                     self.subpaths.append((xs, ys, zs))
+                    if z != zs[-1]:
+                        self.subpath_index_bars.append(len(self.subpaths))
                     xs, ys, zs = [x0, x1], [y0, y1], [z, z]
                 else:
                     xs.append(x1)
@@ -174,7 +217,8 @@ class GcodeReader:
             if len(xs) != 0:
                 self.subpaths.append((xs, ys, zs))
             self.subpath_index_bars.append(len(self.subpaths))
-            print(self.subpath_index_bars)
+            # print(self.subpath_index_bars)
+            # print(self.segs)
 
     def plot(self, color='blue'):
         """ plot the whole part in 3D """
@@ -186,18 +230,32 @@ class GcodeReader:
             ax.plot(xs, ys, zs)
         plt.show()
 
+    def plot_layers(self, min_layer, max_layer):
+        """ plot the layers in [min_layer, max_layer) in 3D """
+        if (min_layer >= max_layer or min_layer < 1 or max_layer >
+                self.n_layers):
+            raise LayerError("Layer number is invalid!")
+        self._compute_subpaths()
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        left, right = (self.subpath_index_bars[min_layer - 1],
+                        self.subpath_index_bars[max_layer - 1])
+        for xs, ys, zs in self.subpaths[left : right]:
+            ax.plot(xs, ys, zs)
+        plt.show()
+
     def plot_layer(self, layer=1):
         """ plot a specific layer in 2D """
         # make sure layer is in [1, self.n_layers]
-        layer = max(layer, 1)
-        layer = min(self.n_layers, layer)
+        # layer = max(layer, 1)
+        # layer = min(self.n_layers, layer)
+        if layer < 1 or layer > self.n_layers:
+            raise LayerError("Layer number is invalid!")
+        self._compute_subpaths()
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111)
-        self._compute_subpaths()
-        # this is a bug
-        # left, right = self.seg_index_bars[layer - 1], self.seg_index_bars[layer]
         left, right = (self.subpath_index_bars[layer - 1],
-                    self.subpath_index_bars[layer])
+                       self.subpath_index_bars[layer])
         for xs, ys, _ in self.subpaths[left: right]:
             ax.plot(xs, ys)
         plt.show()
@@ -217,9 +275,11 @@ def command_line_runner():
     # parse arguments
     parser = argparse.ArgumentParser(description='Gcode Reader')
     parser.add_argument(dest='gcode_file', help='gcode file', action='store')
-    parser.add_argument('-t', dest='filetype', help="""File Type
+    parser.add_argument('-t', '--type', dest='filetype', help="""File Type
             1: regular FDM; 2: Stratasys FDM; 3: LPBF""",
                         required=True, type=int, action='store')
+    parser.add_argument('-l', '-layer', dest='layer_idx', action='store',
+                        type=int, help='layer index for plot')
     args = parser.parse_args()
     # handle Gcode file type
     if not GcodeType.has_value(args.filetype):
@@ -232,7 +292,8 @@ def command_line_runner():
         filetype = GcodeType(args.filetype)
     gcode_reader = GcodeReader(filename=args.gcode_file, filetype=filetype)
     gcode_reader.describe()
-    gcode_reader.plot_layer(layer=1)
+    gcode_reader.plot_layer(layer=args.layer_idx)
+    # gcode_reader.plot_layers(min_layer=1, max_layer=2)
     # gcode_reader.plot()
 
 
