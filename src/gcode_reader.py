@@ -6,6 +6,14 @@
 ##################################
 # Gcode reader
 ##################################
+# TODO:
+# 1. number of subpaths
+# 2. number of nozzle travels
+# 3. total distance
+# 4. number of elements in each layer
+# 5. support stratasys file
+# 6. support LPBF file
+##################################
 
 # standard library
 import math
@@ -52,6 +60,7 @@ class GcodeReader:
         self.index_bars = []
         self.summary = None
         self.lengths = None
+        self.subpaths = None
         # read file to populate variables
         self._read()
 
@@ -68,7 +77,7 @@ class GcodeReader:
         with open(self.filename) as infile:
             # read nonempty lines
             lines = [line.strip() for line in infile.readlines()
-                    if line.strip()]
+                     if line.strip()]
             # only keep line that starts with 'G1'
             lines = [line for line in lines if line.startswith('G1')]
         # pp.pprint(lines) # for debug
@@ -94,22 +103,32 @@ class GcodeReader:
         self.index_bars.append(self.n_segs)
         assert(len(self.index_bars) - self.n_layers == 1)
 
+    def _compute_subpaths(self):
+        """ compute subpaths
+            a subpath is represented by (xs, ys, zs)
+        """
+        if not self.subpaths:
+            self.subpaths = []
+            x0, y0, x1, y1, z = self.segs[0, :]
+            xs, ys, zs = [x0, x1], [y0, y1], [z, z]
+            for x0, y0, x1, y1, z in self.segs[1:, :]:
+                if x0 != xs[-1] or y0 != ys[-1] or z != zs[-1]:
+                    self.subpaths.append((xs, ys, zs))
+                    xs, ys, zs = [x0, x1], [y0, y1], [z, z]
+                else:
+                    xs.append(x1)
+                    ys.append(y1)
+                    zs.append(z)
+            if len(xs) != 0:
+                self.subpaths.append((xs, ys, zs))
+
     def plot(self, color='blue'):
         """ plot the whole part in 3D """
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111, projection='3d')
         assert(self.n_segs > 0)
-        x0, y0, x1, y1, z = self.segs[0, :]
-        xs, ys, zs = [x0, x1], [y0, y1], [z, z]
-        for x0, y0, x1, y1, z in self.segs[1:, :]:
-            if x0 != xs[-1] or y0 != ys[-1] or z != zs[-1]:
-                ax.plot(xs, ys, zs)
-                xs, ys, zs = [x0, x1], [y0, y1], [z, z]
-            else:
-                xs.append(x1)
-                ys.append(y1)
-                zs.append(z)
-        if len(xs) != 0:
+        self._compute_subpaths()
+        for xs, ys, zs in self.subpaths:
             ax.plot(xs, ys, zs)
         plt.show()
 
@@ -120,24 +139,16 @@ class GcodeReader:
         layer = min(self.n_layers, layer)
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111)
+        self._compute_subpaths()
         left, right = self.index_bars[layer - 1], self.index_bars[layer]
-        x0, y0, x1, y1, _ = self.segs[left, :]
-        xs, ys = [x0, x1], [y0, y1]
-        for x0, y0, x1, y1, _ in self.segs[left + 1: right, :]:
-            if x0 != xs[-1] or y0 != ys[-1]:
-                ax.plot(xs, ys)
-                xs, ys = [x0, x1], [y0, y1]
-            else:
-                xs.append(x1)
-                ys.append(y1)
-        if len(xs) != 0:
+        for xs, ys, _ in self.subpaths[left: right]:
             ax.plot(xs, ys)
         plt.show()
 
     def describe(self):
         if not self.summary:
             self.lengths = [math.hypot(x1 - x0, y1 - y0) for x0, y0, x1, y1, _
-                    in self.segs]
+                            in self.segs]
             series = pd.Series(self.lengths)
             self.summary = series.describe()
         print("1. Line segments information: ")
@@ -146,11 +157,14 @@ class GcodeReader:
 
 def command_line_runner():
     """ main function """
+    # parse arguments
     parser = argparse.ArgumentParser(description='Gcode Reader')
     parser.add_argument(dest='gcode_file', help='gcode file', action='store')
-    parser.add_argument('-t', dest='filetype', help='file type: ',
-                        type=int, action='store')
+    parser.add_argument('-t', dest='filetype', help="""File Type
+            1: regular FDM; 2: Stratasys FDM; 3: LPBF""",
+                        required=True, type=int, action='store')
     args = parser.parse_args()
+    # handle Gcode file type
     if not GcodeType.has_value(args.filetype):
         print('Invalid G-code file type: {:d}'.format(args.filetype))
         print('Valid types are listed below')
