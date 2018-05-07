@@ -84,10 +84,10 @@ class GcodeReader:
         """ read LPBF gcode """
         with open(self.filename) as infile:
             # read nonempty lines
-            lines = [line.strip() for line in infile.readlines()
-                     if line.strip()]
+            lines = (line.strip() for line in infile.readlines()
+                     if line.strip())
             # only keep line that starts with 'N'
-            lines = [line for line in lines if line.startswith('N')]
+            lines = (line for line in lines if line.startswith('N'))
         # pp.pprint(lines) # for debug
         self.segs = []
         self.powers = []
@@ -120,10 +120,10 @@ class GcodeReader:
         """ read fDM regular gcode type """
         with open(self.filename) as infile:
             # read nonempty lines
-            lines = [line.strip() for line in infile.readlines()
-                     if line.strip()]
+            lines = (line.strip() for line in infile.readlines()
+                     if line.strip())
             # only keep line that starts with 'G1'
-            lines = [line for line in lines if line.startswith('G1')]
+            lines = (line for line in lines if line.startswith('G1'))
         # pp.pprint(lines) # for debug
         self.segs = []
         temp = -float('inf')
