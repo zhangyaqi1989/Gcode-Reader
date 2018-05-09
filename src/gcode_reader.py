@@ -11,6 +11,7 @@
 # 2. number of nozzle travels
 # 3. total distance
 # 4. number of elements in each layer
+# 5. save limits in ds
 ##################################
 
 # standard library
@@ -283,6 +284,17 @@ class GcodeReader:
         df = df.set_index('layer')
         print(df)
 
+    def print_animation(self):
+        """ animation of the print process """
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        for sub_path in self.subpaths:
+            xs, ys, zs = sub_path
+            ax.plot(xs, ys, zs)
+            plt.pause(0.1)
+            plt.draw()
+        plt.show()
+
 
 def command_line_runner():
     """ main function """
@@ -314,6 +326,7 @@ def command_line_runner():
     else:
         if args.layer_idx:
             gcode_reader.plot_layer(layer=args.layer_idx)
+    # gcode_reader.print_animation()
     # gcode_reader.plot_layers(min_layer=1, max_layer=2)
     # gcode_reader.plot()
 
