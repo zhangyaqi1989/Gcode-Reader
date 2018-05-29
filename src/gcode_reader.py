@@ -4,23 +4,26 @@
 # University of Wisconsin-Madison
 # Author: Yaqi Zhang
 ##################################
-# Gcode reader
+"""
+Gcode reader for both FDM (regular and Stratasys) and LPBF
+"""
 ##################################
 # TODO:
-# 1. number of subpaths
-# 2. number of nozzle travels
-# 3. total distance
-# 4. number of elements in each layer
-# 5. save limits in ds
+# 1. number of subpaths (done)
+# 2. number of nozzle travels (done)
+# 3. total distance (done)
+# 4. number of elements in each layer (done)
+# 5. save limits in ds and show it in describe() method
+# 6. add comments to introduce each attribute in GcodeReader class
 ##################################
 
 # standard library
-import math
-import os.path
-import sys
 import argparse
 from enum import Enum
+import math
+import os.path
 import pprint
+import sys
 
 # third party library
 import numpy as np
@@ -58,19 +61,23 @@ class GcodeReader:
         self.filename = filename
         self.filetype = filetype
         # print(self.filetype)
-        self.n_segs = 0
-        self.segs = None
-        self.n_layers = 0
+        self.n_segs = 0  # number of line segments
+        self.segs = None  # list of line segments [(x0, y0, x1, y1, z)]
+        self.n_layers = 0  # number of layers
         self.seg_index_bars = []
         self.subpath_index_bars = []
         self.summary = None
         self.lengths = None
         self.subpaths = None
+        self.xylimits = None
         # read file to populate variables
         self._read()
 
     def _read(self):
-        """ read the file and stores segs into data structure """
+        """
+        read the file and populate self.segs, self.n_segs and
+        self.seg_index_bars
+        """
         if self.filetype == GcodeType.FDM_REGULAR:
             self._read_fdm_regular()
         elif self.filetype == GcodeType.FDM_STRATASYS:
@@ -80,6 +87,18 @@ class GcodeReader:
         else:
             print("file type is not supported")
             sys.exit(1)
+        self._compute_xylimits()
+
+    def _compute_xylimits(self):
+        """ compute xylimits based on segs """
+        xmin, xmax = float('inf'), -float('inf')
+        ymin, ymax = float('inf'), -float('inf')
+        for x0, y0, x1, y1, z in self.segs:
+            xmin = min(x0, x1) if min(x0, x1) < xmin else xmin
+            ymin = min(y0, y1) if min(y0, y1) < ymin else ymin
+            xmax = max(x0, x1) if max(x0, x1) > xmax else xmax
+            ymax = max(y0, y1) if max(y0, y1) > ymax else ymax
+        self.xylimits = (xmin, xmax, ymin, ymax)
 
     def _read_lpbf(self):
         """ read LPBF gcode """
@@ -283,9 +302,16 @@ class GcodeReader:
         df = pd.DataFrame(data)
         df = df.set_index('layer')
         print(df)
+        print("3. Other information: ")
+        print("Total path length equals {:0.4f}.".format(sum(self.lengths)))
+        print("Number of travels equals {:d}.".format(len(self.subpaths)))
+        print("Number of subpaths equals {:d}.".format(len(self.subpaths)))
+        print(
+            "X and Y limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
+                *self.xylimits))
 
     def print_animation(self):
-        """ animation of the print process """
+        """ animation of the print process using pause and draw """
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111, projection='3d')
         for sub_path in self.subpaths:
@@ -298,19 +324,20 @@ class GcodeReader:
 
 def command_line_runner():
     """ main function """
-    # parse arguments
+    # 1. parse arguments
     parser = argparse.ArgumentParser(description='Gcode Reader')
     parser.add_argument(dest='gcode_file', help='gcode file', action='store')
     parser.add_argument('-t', '--type', dest='filetype', help="""File Type
             1: regular FDM; 2: Stratasys FDM; 3: LPBF""",
                         required=True, type=int, action='store')
     parser.add_argument('-l', '--layer', dest='layer_idx', action='store',
-                        type=int, help='layer index for plot')
+                        type=int, help='plot a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
     args = parser.parse_args()
-    print(args)
-    # handle Gcode file type
+    # print(args)
+
+    # 2. handle Gcode file type
     if not GcodeType.has_value(args.filetype):
         print('Invalid G-code file type: {:d}'.format(args.filetype))
         print('Valid types are listed below')
@@ -320,7 +347,9 @@ def command_line_runner():
     else:
         filetype = GcodeType(args.filetype)
     gcode_reader = GcodeReader(filename=args.gcode_file, filetype=filetype)
+    # 3. print out some statistic information to standard output
     gcode_reader.describe()
+    # 4. plot the whole part or a layer
     if args.plot3d:
         gcode_reader.plot()
     else:
