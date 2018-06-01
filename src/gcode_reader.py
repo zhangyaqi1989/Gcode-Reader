@@ -15,8 +15,10 @@ Gcode reader for both FDM (regular and Stratasys) and LPBF
 # 4. number of elements in each layer (done)
 # 5. save limits in ds and show it in describe() method (done)
 # 6. add comments to introduce each attribute in GcodeReader class
-# 7. add mesh method and mesh plot
+# 7. add mesh method and mesh plot (done)
 # 8. add ax arg to plot() method
+# 9. add animation for single layer plot segs
+# 10. add min_layer and max_layer args to animate_layers()
 ##################################
 
 # standard library
@@ -71,7 +73,7 @@ class GcodeReader:
         self.summary = None
         self.lengths = None
         self.subpaths = None
-        self.xylimits = None
+        self.xyzlimits = None
         self.elements = None
         # read file to populate variables
         self._read()
@@ -118,18 +120,21 @@ class GcodeReader:
         else:
             print("file type is not supported")
             sys.exit(1)
-        self._compute_xylimits()
+        self.xyzlimits = self._compute_xyzlimits(self.segs)
 
-    def _compute_xylimits(self):
-        """ compute xylimits based on segs """
+    def _compute_xyzlimits(self, seg_list):
+        """ compute axis limits of a segments list """
         xmin, xmax = float('inf'), -float('inf')
         ymin, ymax = float('inf'), -float('inf')
-        for x0, y0, x1, y1, z in self.segs:
+        zmin, zmax = float('inf'), -float('inf')
+        for x0, y0, x1, y1, z in seg_list:
             xmin = min(x0, x1) if min(x0, x1) < xmin else xmin
             ymin = min(y0, y1) if min(y0, y1) < ymin else ymin
+            zmin = z if z < zmin else zmin
             xmax = max(x0, x1) if max(x0, x1) > xmax else xmax
             ymax = max(y0, y1) if max(y0, y1) > ymax else ymax
-        self.xylimits = (xmin, xmax, ymin, ymax)
+            zmax = z if z > zmax else zmax
+        return (xmin, xmax, ymin, ymax, zmin, zmax)
 
     def _read_lpbf(self):
         """ read LPBF gcode """
@@ -337,14 +342,18 @@ class GcodeReader:
         print("Total path length equals {:0.4f}.".format(sum(self.lengths)))
         print("Number of travels equals {:d}.".format(len(self.subpaths)))
         print("Number of subpaths equals {:d}.".format(len(self.subpaths)))
-        print(
-            "X and Y limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
-                *self.xylimits))
+        print("X and Y limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
+                *self.xyzlimits))
 
-    def print_animation(self):
+    def animate_layers(self):
         """ animation of the print process using pause and draw """
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111, projection='3d')
+        xmin, xmax, ymin, ymax, zmin, zmax = self.xyzlimits
+        ax.set_xlim([xmin, xmax])
+        ax.set_ylim([ymin, ymax])
+        if zmax > zmin:
+            ax.set_zlim([zmin, zmax])
         for sub_path in self.subpaths:
             xs, ys, zs = sub_path
             ax.plot(xs, ys, zs)
@@ -392,7 +401,7 @@ def command_line_runner():
     # gcode_reader.plot_mesh()
 
     # test animation
-    # gcode_reader.print_animation()
+    gcode_reader.animate_layers()
     # gcode_reader.plot_layers(min_layer=1, max_layer=2)
     # gcode_reader.plot()
 
