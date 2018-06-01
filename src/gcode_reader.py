@@ -8,13 +8,15 @@
 Gcode reader for both FDM (regular and Stratasys) and LPBF
 """
 ##################################
-# TODO:
+# TODO List:
 # 1. number of subpaths (done)
 # 2. number of nozzle travels (done)
 # 3. total distance (done)
 # 4. number of elements in each layer (done)
-# 5. save limits in ds and show it in describe() method
+# 5. save limits in ds and show it in describe() method (done)
 # 6. add comments to introduce each attribute in GcodeReader class
+# 7. add mesh method and mesh plot
+# 8. add ax arg to plot() method
 ##################################
 
 # standard library
@@ -70,8 +72,37 @@ class GcodeReader:
         self.lengths = None
         self.subpaths = None
         self.xylimits = None
+        self.elements = None
         # read file to populate variables
         self._read()
+
+    def mesh(self, max_length):
+        """ mesh segments according to max_length """
+        self.elements = []
+        for x0, y0, x1, y1, z in self.segs:
+            length = math.hypot(x0 - x1, y0 - y1)
+            n_slices = math.ceil(length / max_length)
+            dx = (x1 - x0) / n_slices
+            dy = (y1 - y0) / n_slices
+            for _ in range(n_slices - 1):
+                self.elements.append((x0, y0, x0 + dx, y0 + dy, z))
+                x0, y0 = x0 + dx, y0 + dy
+            self.elements.append((x0, y0, x1, y1, z))
+        print("Meshing finished, {:d} elements generated".
+              format(len(self.elements)))
+
+    def plot_mesh(self, ax=None):
+        """ plot mesh """
+        if not self.elements:
+            self.mesh()
+        if not ax:
+            fig = plt.figure(figsize=(8, 8))
+            ax = fig.add_subplot(111, projection='3d')
+        for x0, y0, x1, y1, z in self.elements:
+            ax.plot([x0, x1], [y0, y1], [z, z], 'b-')
+            ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), z, 'r')
+        plt.show()
+        return ax
 
     def _read(self):
         """
@@ -355,6 +386,12 @@ def command_line_runner():
     else:
         if args.layer_idx:
             gcode_reader.plot_layer(layer=args.layer_idx)
+    # 5. test mesh
+    # gcode_reader.mesh(1)
+    # print(len(gcode_reader.elements))
+    # gcode_reader.plot_mesh()
+
+    # test animation
     # gcode_reader.print_animation()
     # gcode_reader.plot_layers(min_layer=1, max_layer=2)
     # gcode_reader.plot()
