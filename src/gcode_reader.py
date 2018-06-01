@@ -17,8 +17,10 @@ Gcode reader for both FDM (regular and Stratasys) and LPBF
 # 6. add comments to introduce each attribute in GcodeReader class
 # 7. add mesh method and mesh plot (done)
 # 8. add ax arg to plot() method
-# 9. add animation for single layer plot segs
-# 10. add min_layer and max_layer args to animate_layers()
+# 9. add animate_layer() by animating printing segs (done)
+# 10. add min_layer and max_layer args to animate_layers() (done)
+# 11. add -a optional command for animation
+# 12. update readme
 ##################################
 
 # standard library
@@ -290,7 +292,7 @@ class GcodeReader:
     def plot_layers(self, min_layer, max_layer):
         """ plot the layers in [min_layer, max_layer) in 3D """
         if (min_layer >= max_layer or min_layer < 1 or max_layer >
-                self.n_layers):
+                self.n_layers + 1):
             raise LayerError("Layer number is invalid!")
         self._compute_subpaths()
         fig = plt.figure(figsize=(8, 8))
@@ -343,10 +345,43 @@ class GcodeReader:
         print("Number of travels equals {:d}.".format(len(self.subpaths)))
         print("Number of subpaths equals {:d}.".format(len(self.subpaths)))
         print("X and Y limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
-                *self.xyzlimits))
+            *self.xyzlimits))
 
-    def animate_layers(self):
-        """ animation of the print process using pause and draw """
+    def animate_layer(self, layer=1, animation_time=5):
+        """
+        animate the printing of a specific layer in 2D
+        """
+        if layer < 1 or layer > self.n_layers:
+            raise LayerError("Layer number is invalid!")
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_subplot(111)
+        xmin, xmax, ymin, ymax, _, _ = self.xyzlimits
+        ax.set_xlim([xmin, xmax])
+        ax.set_ylim([ymin, ymax])
+        left, right = (self.seg_index_bars[layer - 1],
+                       self.seg_index_bars[layer])
+        seg_lst = self.segs[left: right]
+        lens = np.array([abs(x0 - x1) + abs(y0 - y1) for x0, y0, x1, y1, z in
+                         seg_lst])
+        times = lens / lens.sum() * animation_time
+        print(times.sum())
+        for time, (x0, y0, x1, y1, _) in zip(times, seg_lst):
+            ax.plot([x0, x1], [y0, y1], 'b-')
+            plt.pause(time)
+            plt.draw()
+        plt.show()
+
+    def animate_layers(self, min_layer, max_layer):
+        """
+        animation of the print process of multiple layers [min_layer,
+        max_layer)
+        implement with plt.pause() and plt.draw()
+        """
+        if (min_layer >= max_layer or min_layer < 1 or max_layer >
+                self.n_layers + 1):
+            raise LayerError("Layer number is invalid!")
+        left, right = (self.subpath_index_bars[min_layer - 1],
+                       self.subpath_index_bars[max_layer - 1])
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111, projection='3d')
         xmin, xmax, ymin, ymax, zmin, zmax = self.xyzlimits
@@ -354,7 +389,7 @@ class GcodeReader:
         ax.set_ylim([ymin, ymax])
         if zmax > zmin:
             ax.set_zlim([zmin, zmax])
-        for sub_path in self.subpaths:
+        for sub_path in self.subpaths[left:right]:
             xs, ys, zs = sub_path
             ax.plot(xs, ys, zs)
             plt.pause(0.1)
@@ -401,10 +436,12 @@ def command_line_runner():
     # gcode_reader.plot_mesh()
 
     # test animation
-    gcode_reader.animate_layers()
+    # gcode_reader.animate_layers(min_layer=1, max_layer=2)
+    # gcode_reader.animate_layer(layer=1, animation_time=5)
     # gcode_reader.plot_layers(min_layer=1, max_layer=2)
     # gcode_reader.plot()
 
 
 if __name__ == "__main__":
+    print("Gcode Reader")
     command_line_runner()
