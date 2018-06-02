@@ -19,8 +19,10 @@ Gcode reader for both FDM (regular and Stratasys) and LPBF
 # 8. add ax arg to plot() method
 # 9. add animate_layer() by animating printing segs (done)
 # 10. add min_layer and max_layer args to animate_layers() (done)
-# 11. add -a optional command for animation
-# 12. update readme
+# 11. add -a optional command for animation (done)
+# 12. update readme (done)
+# 13. add some analysis for powers (done)
+# 13. add some post-process
 ##################################
 
 # standard library
@@ -167,6 +169,7 @@ class GcodeReader:
                 x0, y0, z = old_ngxyzfl[2:5]
                 x1, y1 = ngxyzfl[2:4]
                 self.segs.append((x0, y0, x1, y1, z))
+                self.powers.append(ngxyzfl[-1])
                 seg_count += 1
         self.n_segs = len(self.segs)
         self.segs = np.array(self.segs)
@@ -342,6 +345,16 @@ class GcodeReader:
         print(df)
         print("3. Other information: ")
         print("Total path length equals {:0.4f}.".format(sum(self.lengths)))
+        # compute total travel lengths
+        travels = []
+        for i in range(len(self.subpaths) - 1):
+            xsi, ysi, zsi = self.subpaths[i]
+            xsj, ysj, zsj = self.subpaths[i + 1]
+            travels.append(abs(xsj[0] - xsi[-1]) + abs(ysj[0] - ysi[-1])
+                    + abs(zsj[0] - zsi[-1]))
+        print("Total travel length equals {:0.4f}.".format(sum(travels)))
+        if self.filetype == GcodeType.LPBF:
+            print("Laser power range [{}, {}]".format(min(self.powers), max(self.powers)))
         print("Number of travels equals {:d}.".format(len(self.subpaths)))
         print("Number of subpaths equals {:d}.".format(len(self.subpaths)))
         print("X and Y limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
@@ -364,7 +377,7 @@ class GcodeReader:
         lens = np.array([abs(x0 - x1) + abs(y0 - y1) for x0, y0, x1, y1, z in
                          seg_lst])
         times = lens / lens.sum() * animation_time
-        print(times.sum())
+        # print(times.sum())
         for time, (x0, y0, x1, y1, _) in zip(times, seg_lst):
             ax.plot([x0, x1], [y0, y1], 'b-')
             plt.pause(time)
@@ -405,8 +418,10 @@ def command_line_runner():
     parser.add_argument('-t', '--type', dest='filetype', help="""File Type
             1: regular FDM; 2: Stratasys FDM; 3: LPBF""",
                         required=True, type=int, action='store')
-    parser.add_argument('-l', '--layer', dest='layer_idx', action='store',
+    parser.add_argument('-l', '--layer', dest='plot_layer_idx', action='store',
                         type=int, help='plot a layer in 2D')
+    parser.add_argument('-a', '--animation', dest='ani_layer_idx',
+            action='store', type=int, help='animate printing of a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
     args = parser.parse_args()
@@ -428,8 +443,10 @@ def command_line_runner():
     if args.plot3d:
         gcode_reader.plot()
     else:
-        if args.layer_idx:
-            gcode_reader.plot_layer(layer=args.layer_idx)
+        if args.plot_layer_idx:
+            gcode_reader.plot_layer(layer=args.plot_layer_idx)
+        elif args.ani_layer_idx:
+            gcode_reader.animate_layer(layer=args.ani_layer_idx)
     # 5. test mesh
     # gcode_reader.mesh(1)
     # print(len(gcode_reader.elements))

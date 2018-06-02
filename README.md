@@ -1,5 +1,5 @@
 # G-code Reader
-A Gcode visulization and analysis tool written in python.
+A Gcode visulization and analysis tool written in python. It supports FDM Gcode, Stratasys Gcode and SLS Gcode. It can print a single layer, print multiple layers. It also can animate the printing of a single layer or multiple layers.
 
 ![tweety2d](images/tweety2d.png)
 
