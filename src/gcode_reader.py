@@ -5,10 +5,15 @@
 # Author: Yaqi Zhang
 ##################################
 """
-Gcode reader for both FDM (regular and Stratasys) and LPBF
+Gcode reader for both FDM (regular and Stratasys) and LPBF.
+It supports the following functionalities
+1. plot a layer in 2D, plot layers in 3D
+2. list important information of path
+3. animate the printing of a layer in 2D, animate the printing of layers in 3D
+4. mesh the path, plot mesh, list important informations about the mesh
 """
 ##################################
-# TODO List:
+# TODO List and Development log:
 # 1. number of subpaths (done)
 # 2. number of nozzle travels (done)
 # 3. total distance (done)
@@ -16,13 +21,14 @@ Gcode reader for both FDM (regular and Stratasys) and LPBF
 # 5. save limits in ds and show it in describe() method (done)
 # 6. add comments to introduce each attribute in GcodeReader class
 # 7. add mesh method and mesh plot (done)
-# 8. add ax arg to plot() method
+# 8. add ax arg to plot() method (done)
 # 9. add animate_layer() by animating printing segs (done)
 # 10. add min_layer and max_layer args to animate_layers() (done)
 # 11. add -a optional command for animation (done)
 # 12. update readme (done)
 # 13. add some analysis for powers (done)
-# 13. add some post-process
+# 13. add some post-process (like temperature gradient analysis)
+# create a new project called postprocess and preprocess
 ##################################
 
 # standard library
@@ -36,9 +42,13 @@ import sys
 # third party library
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 
+sns.set() # use seaborn style
+
+# global variables
 pp = pprint.PrettyPrinter(indent=4)
 
 
@@ -72,6 +82,9 @@ class GcodeReader:
         self.n_segs = 0  # number of line segments
         self.segs = None  # list of line segments [(x0, y0, x1, y1, z)]
         self.n_layers = 0  # number of layers
+        # seg_index_bars and subpath_index_bars have the same format
+        # e.g. ith layer has segment indexes [seg_index_bars[i-1],
+        # seg_index_bars[i])
         self.seg_index_bars = []
         self.subpath_index_bars = []
         self.summary = None
@@ -107,7 +120,6 @@ class GcodeReader:
         for x0, y0, x1, y1, z in self.elements:
             ax.plot([x0, x1], [y0, y1], [z, z], 'b-')
             ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), z, 'r')
-        plt.show()
         return ax
 
     def _read(self):
@@ -282,31 +294,33 @@ class GcodeReader:
             # print(self.subpath_index_bars)
             # print(self.segs)
 
-    def plot(self, color='blue'):
+    def plot(self, color='blue', ax=None):
         """ plot the whole part in 3D """
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection='3d')
+        if not ax:
+            fig = plt.figure(figsize=(8, 8))
+            ax = fig.add_subplot(111, projection='3d')
         assert(self.n_segs > 0)
         self._compute_subpaths()
         for xs, ys, zs in self.subpaths:
             ax.plot(xs, ys, zs)
-        plt.show()
+        return ax
 
-    def plot_layers(self, min_layer, max_layer):
+    def plot_layers(self, min_layer, max_layer, ax=None):
         """ plot the layers in [min_layer, max_layer) in 3D """
         if (min_layer >= max_layer or min_layer < 1 or max_layer >
                 self.n_layers + 1):
             raise LayerError("Layer number is invalid!")
         self._compute_subpaths()
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection='3d')
+        if not ax:
+            fig = plt.figure(figsize=(8, 8))
+            ax = fig.add_subplot(111, projection='3d')
         left, right = (self.subpath_index_bars[min_layer - 1],
                        self.subpath_index_bars[max_layer - 1])
         for xs, ys, zs in self.subpaths[left: right]:
             ax.plot(xs, ys, zs)
-        plt.show()
+        return ax
 
-    def plot_layer(self, layer=1):
+    def plot_layer(self, layer=1, ax=None):
         """ plot a specific layer in 2D """
         # make sure layer is in [1, self.n_layers]
         # layer = max(layer, 1)
@@ -314,13 +328,15 @@ class GcodeReader:
         if layer < 1 or layer > self.n_layers:
             raise LayerError("Layer number is invalid!")
         self._compute_subpaths()
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111)
+        # fig = plt.figure(figsize=(8, 8))
+        # ax = fig.add_subplot(111)
+        if not ax:
+            fig, ax = plt.subplots(figsize=(8, 8))
         left, right = (self.subpath_index_bars[layer - 1],
                        self.subpath_index_bars[layer])
         for xs, ys, _ in self.subpaths[left: right]:
             ax.plot(xs, ys)
-        plt.show()
+        return ax
 
     def describe(self):
         if not self.summary:
@@ -351,10 +367,11 @@ class GcodeReader:
             xsi, ysi, zsi = self.subpaths[i]
             xsj, ysj, zsj = self.subpaths[i + 1]
             travels.append(abs(xsj[0] - xsi[-1]) + abs(ysj[0] - ysi[-1])
-                    + abs(zsj[0] - zsi[-1]))
+                           + abs(zsj[0] - zsi[-1]))
         print("Total travel length equals {:0.4f}.".format(sum(travels)))
         if self.filetype == GcodeType.LPBF:
-            print("Laser power range [{}, {}]".format(min(self.powers), max(self.powers)))
+            print("Laser power range [{}, {}]".format(
+                min(self.powers), max(self.powers)))
         print("Number of travels equals {:d}.".format(len(self.subpaths)))
         print("Number of subpaths equals {:d}.".format(len(self.subpaths)))
         print("X and Y limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
@@ -421,11 +438,11 @@ def command_line_runner():
     parser.add_argument('-l', '--layer', dest='plot_layer_idx', action='store',
                         type=int, help='plot a layer in 2D')
     parser.add_argument('-a', '--animation', dest='ani_layer_idx',
-            action='store', type=int, help='animate printing of a layer in 2D')
+                        action='store', type=int, help='animate printing of a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
     args = parser.parse_args()
-    # print(args)
+    # pp.pprint(args)
 
     # 2. handle Gcode file type
     if not GcodeType.has_value(args.filetype):
@@ -441,12 +458,13 @@ def command_line_runner():
     gcode_reader.describe()
     # 4. plot the whole part or a layer
     if args.plot3d:
-        gcode_reader.plot()
+        ax = gcode_reader.plot()
     else:
         if args.plot_layer_idx:
-            gcode_reader.plot_layer(layer=args.plot_layer_idx)
+            ax = gcode_reader.plot_layer(layer=args.plot_layer_idx)
         elif args.ani_layer_idx:
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
+
     # 5. test mesh
     # gcode_reader.mesh(1)
     # print(len(gcode_reader.elements))
@@ -455,8 +473,17 @@ def command_line_runner():
     # test animation
     # gcode_reader.animate_layers(min_layer=1, max_layer=2)
     # gcode_reader.animate_layer(layer=1, animation_time=5)
-    # gcode_reader.plot_layers(min_layer=1, max_layer=2)
+    # ax = gcode_reader.plot_layers(min_layer=1, max_layer=2)
     # gcode_reader.plot()
+
+    # specify title and x, y label
+    _, filename = args.gcode_file.rsplit(os.path.sep, 1)
+    ax.set_title(filename)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    if ax.name == '3d':
+        ax.set_zlabel('z')
+    plt.show()
 
 
 if __name__ == "__main__":
