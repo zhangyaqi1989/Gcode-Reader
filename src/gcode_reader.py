@@ -29,6 +29,8 @@ It supports the following functionalities
 # 13. add some analysis for powers (done)
 # 13. add some post-process (like temperature gradient analysis)
 # create a new project called postprocess and preprocess
+# 14. finish plot_mesh_layer() method
+# 15. add analyze elements method
 ##################################
 
 # standard library
@@ -110,6 +112,19 @@ class GcodeReader:
         print("Meshing finished, {:d} elements generated".
               format(len(self.elements)))
 
+
+    def plot_mesh_layer(self, layernum, ax=None):
+        """ plot mesh in one layer """
+        if not self.elements:
+            self.mesh()
+        if not ax:
+            fig, ax = plt.subplots(figsize=(8, 8))
+        for x0, y0, x1, y1, _ in self.elements:
+            ax.plot([x0, x1], [y0, y1], 'b-')
+            # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
+            ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=4)
+        return ax
+
     def plot_mesh(self, ax=None):
         """ plot mesh """
         if not self.elements:
@@ -119,7 +134,8 @@ class GcodeReader:
             ax = fig.add_subplot(111, projection='3d')
         for x0, y0, x1, y1, z in self.elements:
             ax.plot([x0, x1], [y0, y1], [z, z], 'b-')
-            ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), z, 'r')
+            ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), z, 'r', s=4,
+                    color='r')
         return ax
 
     def _read(self):
@@ -372,9 +388,9 @@ class GcodeReader:
         if self.filetype == GcodeType.LPBF:
             print("Laser power range [{}, {}]".format(
                 min(self.powers), max(self.powers)))
-        print("Number of travels equals {:d}.".format(len(self.subpaths)))
+        print("Number of nozzle travels equals {:d}.".format(len(self.subpaths)))
         print("Number of subpaths equals {:d}.".format(len(self.subpaths)))
-        print("X and Y limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
+        print("X, Y and Z limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
             *self.xyzlimits))
 
     def animate_layer(self, layer=1, animation_time=5):
@@ -466,23 +482,27 @@ def command_line_runner():
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
 
     # 5. test mesh
-    # gcode_reader.mesh(1)
+    gcode_reader.mesh(1)
     # print(len(gcode_reader.elements))
     # gcode_reader.plot_mesh()
+    ax = gcode_reader.plot_mesh_layer(1)
 
     # test animation
     # gcode_reader.animate_layers(min_layer=1, max_layer=2)
     # gcode_reader.animate_layer(layer=1, animation_time=5)
-    # ax = gcode_reader.plot_layers(min_layer=1, max_layer=2)
+    # ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
+    # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
     # gcode_reader.plot()
 
     # specify title and x, y label
-    _, filename = args.gcode_file.rsplit(os.path.sep, 1)
-    ax.set_title(filename)
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    if ax.name == '3d':
-        ax.set_zlabel('z')
+    if args.plot3d or args.plot_layer_idx:
+        _, filename = args.gcode_file.rsplit(os.path.sep, 1)
+        ax.set_title(filename)
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        if ax.name == '3d':
+            ax.set_zlabel('z')
+        ax.axis('equal')
     plt.show()
 
 
