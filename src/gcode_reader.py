@@ -100,15 +100,24 @@ class GcodeReader:
     def mesh(self, max_length):
         """ mesh segments according to max_length """
         self.elements = []
-        for x0, y0, x1, y1, z in self.segs:
+        self.elements_index_bars = []
+        bar = 0
+        n_eles = 0
+        for i, (x0, y0, x1, y1, z) in enumerate(self.segs):
+            if i == self.seg_index_bars[bar]:
+                bar += 1
+                self.elements_index_bars.append(n_eles)
             length = math.hypot(x0 - x1, y0 - y1)
             n_slices = math.ceil(length / max_length)
+            n_eles += n_slices
             dx = (x1 - x0) / n_slices
             dy = (y1 - y0) / n_slices
             for _ in range(n_slices - 1):
                 self.elements.append((x0, y0, x0 + dx, y0 + dy, z))
                 x0, y0 = x0 + dx, y0 + dy
             self.elements.append((x0, y0, x1, y1, z))
+        self.elements_index_bars.append(n_eles)
+        # print(self.elements_index_bars)
         print("Meshing finished, {:d} elements generated".
               format(len(self.elements)))
 
@@ -119,7 +128,8 @@ class GcodeReader:
             self.mesh()
         if not ax:
             fig, ax = plt.subplots(figsize=(8, 8))
-        for x0, y0, x1, y1, _ in self.elements:
+        left, right = self.elements_index_bars[layernum - 1:layernum + 1]
+        for x0, y0, x1, y1, _ in self.elements[left:right]:
             ax.plot([x0, x1], [y0, y1], 'b-')
             # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
             ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=4)
