@@ -49,7 +49,7 @@ import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 
-sns.set() # use seaborn style
+sns.set()  # use seaborn style
 
 # global variables
 pp = pprint.PrettyPrinter(indent=4)
@@ -123,7 +123,6 @@ class GcodeReader:
         print("Meshing finished, {:d} elements generated".
               format(len(self.elements)))
 
-
     def plot_mesh_layer(self, layernum, ax=None):
         """ plot mesh in one layer """
         if not self.elements:
@@ -147,7 +146,7 @@ class GcodeReader:
         for x0, y0, x1, y1, z in self.elements:
             ax.plot([x0, x1], [y0, y1], [z, z], 'b-')
             ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), z, 'r', s=4,
-                    color='r')
+                       color='r')
         return ax
 
     def _read(self):
@@ -371,15 +370,15 @@ class GcodeReader:
         if not self.elements:
             self.mesh(max_length)
         self.mesh_lengths = [np.hypot(x1 - x0, y1 - y0) for x0, y0, x1, y1, _
-                    in self.elements]
+                             in self.elements]
         series = pd.Series(self.mesh_lengths)
         print('1. Element length information:')
         print(series.describe())
         print('2. Number of layers: {:d}'.format(self.n_layers))
         data = {'# elements': np.array(self.elements_index_bars[1:]) -
                 np.array(self.elements_index_bars[:-1]),
-                'layer' : np.arange(1, self.n_layers + 1),
-               }
+                'layer': np.arange(1, self.n_layers + 1),
+                }
         df = pd.DataFrame(data)
         df = df.set_index('layer')
         print(df)
@@ -419,7 +418,8 @@ class GcodeReader:
         if self.filetype == GcodeType.LPBF:
             print("Laser power range [{}, {}]".format(
                 min(self.powers), max(self.powers)))
-        print("Number of nozzle travels equals {:d}.".format(len(self.subpaths)))
+        print("Number of nozzle travels equals {:d}.".format(
+            len(self.subpaths)))
         print("Number of subpaths equals {:d}.".format(len(self.subpaths)))
         print("X, Y and Z limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
             *self.xyzlimits))
