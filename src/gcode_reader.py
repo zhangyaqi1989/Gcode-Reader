@@ -24,19 +24,20 @@ It supports the following functionalities
 # 8. add ax arg to plot() method (done)
 # 9. add animate_layer() by animating printing segs (done)
 # 10. add min_layer and max_layer args to animate_layers() (done)
-# 11. add -a optional command for animation (done)
+# 11. add -a optional arg for animation (done)
 # 12. update readme (done)
 # 13. add some analysis for powers (done)
 # 13. add some post-process (like temperature gradient analysis)
 # create a new project called postprocess and preprocess
-# 14. finish plot_mesh_layer() method
-# 15. add analyze elements method
+# 14. finish plot_mesh_layer() method (done)
+# 15. add analyze elements method (done)
+# 16. add -m optional arg for mesh plot (done)
 ##################################
 
 # standard library
 import argparse
 from enum import Enum
-import math
+# import math
 import os.path
 import pprint
 import sys
@@ -94,6 +95,7 @@ class GcodeReader:
         self.subpaths = None
         self.xyzlimits = None
         self.elements = None
+        self.elements_index_bars = []
         # read file to populate variables
         self._read()
 
@@ -107,8 +109,8 @@ class GcodeReader:
             if i == self.seg_index_bars[bar]:
                 bar += 1
                 self.elements_index_bars.append(n_eles)
-            length = math.hypot(x0 - x1, y0 - y1)
-            n_slices = math.ceil(length / max_length)
+            length = np.hypot(x0 - x1, y0 - y1)
+            n_slices = int(np.ceil(length / max_length))
             n_eles += n_slices
             dx = (x1 - x0) / n_slices
             dy = (y1 - y0) / n_slices
@@ -125,7 +127,7 @@ class GcodeReader:
     def plot_mesh_layer(self, layernum, ax=None):
         """ plot mesh in one layer """
         if not self.elements:
-            self.mesh()
+            self.mesh(max_length=1)
         if not ax:
             fig, ax = plt.subplots(figsize=(8, 8))
         left, right = self.elements_index_bars[layernum - 1:layernum + 1]
@@ -364,15 +366,34 @@ class GcodeReader:
             ax.plot(xs, ys)
         return ax
 
+    def describe_mesh(self, max_length):
+        """print basic information of meshing"""
+        if not self.elements:
+            self.mesh(max_length)
+        self.mesh_lengths = [np.hypot(x1 - x0, y1 - y0) for x0, y0, x1, y1, _
+                    in self.elements]
+        series = pd.Series(self.mesh_lengths)
+        print('1. Element length information:')
+        print(series.describe())
+        print('2. Number of layers: {:d}'.format(self.n_layers))
+        data = {'# elements': np.array(self.elements_index_bars[1:]) -
+                np.array(self.elements_index_bars[:-1]),
+                'layer' : np.arange(1, self.n_layers + 1),
+               }
+        df = pd.DataFrame(data)
+        df = df.set_index('layer')
+        print(df)
+
     def describe(self):
+        """print basic information of process plan"""
         if not self.summary:
-            self.lengths = [math.hypot(x1 - x0, y1 - y0) for x0, y0, x1, y1, _
+            self.lengths = [np.hypot(x1 - x0, y1 - y0) for x0, y0, x1, y1, _
                             in self.segs]
             series = pd.Series(self.lengths)
             self.summary = series.describe()
-        print("1. Line segments information: ")
+        print('1. Line segments information: ')
         print(self.summary)
-        print("2. number of layers: {:d}".format(self.n_layers))
+        print('2. Number of layers: {:d}'.format(self.n_layers))
         self._compute_subpaths()
         # print(len(self.seg_index_bars))
         # print(len(self.subpath_index_bars))
@@ -385,8 +406,8 @@ class GcodeReader:
         df = pd.DataFrame(data)
         df = df.set_index('layer')
         print(df)
-        print("3. Other information: ")
-        print("Total path length equals {:0.4f}.".format(sum(self.lengths)))
+        print('3. Other information: ')
+        print('Total path length equals {:0.4f}.'.format(sum(self.lengths)))
         # compute total travel lengths
         travels = []
         for i in range(len(self.subpaths) - 1):
@@ -465,6 +486,8 @@ def command_line_runner():
                         type=int, help='plot a layer in 2D')
     parser.add_argument('-a', '--animation', dest='ani_layer_idx',
                         action='store', type=int, help='animate printing of a layer in 2D')
+    parser.add_argument('-m', '--mesh', dest='mesh_layer_idx', action='store',
+                        type=int, help='plot the mesh of a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
     args = parser.parse_args()
@@ -482,6 +505,7 @@ def command_line_runner():
     gcode_reader = GcodeReader(filename=args.gcode_file, filetype=filetype)
     # 3. print out some statistic information to standard output
     gcode_reader.describe()
+    gcode_reader.describe_mesh(max_length=1)
     # 4. plot the whole part or a layer
     if args.plot3d:
         ax = gcode_reader.plot()
@@ -490,14 +514,16 @@ def command_line_runner():
             ax = gcode_reader.plot_layer(layer=args.plot_layer_idx)
         elif args.ani_layer_idx:
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
+        elif args.mesh_layer_idx:
+            ax = gcode_reader.plot_mesh_layer(layernum=1)
 
     # 5. test mesh
-    gcode_reader.mesh(1)
+    # gcode_reader.mesh(max_length=1)
     # print(len(gcode_reader.elements))
     # gcode_reader.plot_mesh()
-    ax = gcode_reader.plot_mesh_layer(1)
+    # ax = gcode_reader.plot_mesh_layer(1)
 
-    # test animation
+    # test animation (this is outdated)
     # gcode_reader.animate_layers(min_layer=1, max_layer=2)
     # gcode_reader.animate_layer(layer=1, animation_time=5)
     # ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
