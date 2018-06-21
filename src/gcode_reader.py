@@ -27,11 +27,12 @@ It supports the following functionalities
 # 11. add -a optional arg for animation (done)
 # 12. update readme (done)
 # 13. add some analysis for powers (done)
-# 13. add some post-process (like temperature gradient analysis)
-# create a new project called postprocess and preprocess
+# 13. add some post-process (like temperature gradient analysis) (done)
+# create a new project called postprocess and preprocess (done)
 # 14. finish plot_mesh_layer() method (done)
 # 15. add analyze elements method (done)
 # 16. add -m optional arg for mesh plot (done)
+# 17. add margin to animation_layer()
 ##################################
 
 # standard library
@@ -45,6 +46,7 @@ import sys
 # third party library
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as manimation
 import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
@@ -53,6 +55,14 @@ sns.set()  # use seaborn style
 
 # global variables
 pp = pprint.PrettyPrinter(indent=4)
+
+
+def create_movie_writer(title='Movie Writer', fps=15):
+    FFMpegWriter = manimation.writers['ffmpeg']
+    metadata = dict(title=title, artist='Matplotlib',
+                    comment='Movie Support')
+    writer = FFMpegWriter(fps=15, metadata=metadata)
+    return writer
 
 
 class LayerError(Exception):
@@ -424,13 +434,16 @@ class GcodeReader:
         print("X, Y and Z limits: [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}] X [{:0.2f}, {:0.2f}]".format(
             *self.xyzlimits))
 
-    def animate_layer(self, layer=1, animation_time=5):
+    def animate_layer(self, layer=1, animation_time=5, outfile=None):
         """
         animate the printing of a specific layer in 2D
         """
         if layer < 1 or layer > self.n_layers:
             raise LayerError("Layer number is invalid!")
         fig = plt.figure(figsize=(8, 8))
+        if outfile:
+            writer = create_movie_writer()
+            writer.setup(fig, outfile=outfile, dpi=100)
         ax = fig.add_subplot(111)
         xmin, xmax, ymin, ymax, _, _ = self.xyzlimits
         ax.set_xlim([xmin, xmax])
@@ -445,7 +458,12 @@ class GcodeReader:
         for time, (x0, y0, x1, y1, _) in zip(times, seg_lst):
             ax.plot([x0, x1], [y0, y1], 'b-')
             plt.pause(time)
+            if outfile:
+                writer.grab_frame()
             plt.draw()
+        if outfile:
+            writer.finish()
+            print('Creating movie {:s}'.format(outfile))
         plt.show()
 
     def animate_layers(self, min_layer, max_layer):
@@ -474,9 +492,8 @@ class GcodeReader:
         plt.show()
 
 
-def command_line_runner():
-    """ main function """
-    # 1. parse arguments
+def get_parser():
+    """set up parser and return it"""
     parser = argparse.ArgumentParser(description='Gcode Reader')
     parser.add_argument(dest='gcode_file', help='gcode file', action='store')
     parser.add_argument('-t', '--type', dest='filetype', help="""File Type
@@ -490,6 +507,13 @@ def command_line_runner():
                         type=int, help='plot the mesh of a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
+    return parser
+
+
+def command_line_runner():
+    """command line runner"""
+    # 1. parse arguments
+    parser = get_parser()
     args = parser.parse_args()
     # pp.pprint(args)
 
@@ -514,6 +538,7 @@ def command_line_runner():
             ax = gcode_reader.plot_layer(layer=args.plot_layer_idx)
         elif args.ani_layer_idx:
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
+            # outfile='test.mp4')
         elif args.mesh_layer_idx:
             ax = gcode_reader.plot_mesh_layer(layernum=1)
 
