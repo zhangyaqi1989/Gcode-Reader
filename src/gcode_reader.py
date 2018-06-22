@@ -32,8 +32,9 @@ It supports the following functionalities
 # 14. finish plot_mesh_layer() method (done)
 # 15. add analyze elements method (done)
 # 16. add -m optional arg for mesh plot (done)
-# 17. add margin to animation_layer (done)
+# 17. add margin to animate_layer (done)
 # 18. add animation of subplots (done)
+# 19. add margin to animate_layers
 ##################################
 
 # standard library
@@ -555,7 +556,7 @@ def command_line_runner():
             ax = gcode_reader.plot_layer(layer=args.plot_layer_idx)
         elif args.ani_layer_idx:
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
-            # outfile='test.mp4')
+                # outfile='../movies/tweety_layer1.mp4')
         elif args.mesh_layer_idx:
             ax = gcode_reader.plot_mesh_layer(layernum=1)
 

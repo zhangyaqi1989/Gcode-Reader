@@ -14,9 +14,6 @@ A Gcode visulization and analysis tool written in python. It supports FDM Gcode,
 ![octoml](images/octoml.png)
 ![armml](images/armml.png)
 
-* Plot meshing
-![mesh](images/mesh.png)
-
 * Analysis of Process Plan
 ![analysis](images/info1.png)
 ![analysis](images/info2.png)
@@ -24,3 +21,9 @@ A Gcode visulization and analysis tool written in python. It supports FDM Gcode,
 For L-PBF,
 ![analysis](images/info3-pbf.png)
 
+* Plot meshing
+![mesh](images/mesh.png)
+
+* Analysis of meshing
+![analysis](images/info-4.png)
+![analysis](images/info-5.png)
