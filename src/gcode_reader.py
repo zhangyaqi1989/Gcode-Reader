@@ -32,7 +32,8 @@ It supports the following functionalities
 # 14. finish plot_mesh_layer() method (done)
 # 15. add analyze elements method (done)
 # 16. add -m optional arg for mesh plot (done)
-# 17. add margin to animation_layer()
+# 17. add margin to animation_layer (done)
+# 18. add animation of subplots (done)
 ##################################
 
 # standard library
@@ -63,6 +64,12 @@ def create_movie_writer(title='Movie Writer', fps=15):
                     comment='Movie Support')
     writer = FFMpegWriter(fps=15, metadata=metadata)
     return writer
+
+
+def add_margin_to_axis_limits(min_v, max_v, margin=0.1):
+    """compute new min_v and max_v based on margin"""
+    dv = (max_v - min_v) * margin
+    return (min_v - dv, max_v + dv)
 
 
 class LayerError(Exception):
@@ -446,8 +453,10 @@ class GcodeReader:
             writer.setup(fig, outfile=outfile, dpi=100)
         ax = fig.add_subplot(111)
         xmin, xmax, ymin, ymax, _, _ = self.xyzlimits
-        ax.set_xlim([xmin, xmax])
-        ax.set_ylim([ymin, ymax])
+        # ax.set_xlim([xmin, xmax])
+        # ax.set_ylim([ymin, ymax])
+        ax.set_xlim(add_margin_to_axis_limits(xmin, xmax))
+        ax.set_ylim(add_margin_to_axis_limits(ymin, ymax))
         left, right = (self.seg_index_bars[layer - 1],
                        self.seg_index_bars[layer])
         seg_lst = self.segs[left: right]
@@ -466,7 +475,7 @@ class GcodeReader:
             print('Creating movie {:s}'.format(outfile))
         plt.show()
 
-    def animate_layers(self, min_layer, max_layer):
+    def animate_layers(self, min_layer, max_layer, outfile=None):
         """
         animation of the print process of multiple layers [min_layer,
         max_layer)
@@ -479,6 +488,9 @@ class GcodeReader:
                        self.subpath_index_bars[max_layer - 1])
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111, projection='3d')
+        if outfile:
+            writer = create_movie_writer()
+            writer.setup(fig, outfile=outfile, dpi=100)
         xmin, xmax, ymin, ymax, zmin, zmax = self.xyzlimits
         ax.set_xlim([xmin, xmax])
         ax.set_ylim([ymin, ymax])
@@ -487,8 +499,13 @@ class GcodeReader:
         for sub_path in self.subpaths[left:right]:
             xs, ys, zs = sub_path
             ax.plot(xs, ys, zs)
+            if outfile:
+                writer.grab_frame()
             plt.pause(0.1)
             plt.draw()
+        if outfile:
+            writer.finish()
+            print('Creating movie {:s}'.format(outfile))
         plt.show()
 
 
@@ -549,7 +566,8 @@ def command_line_runner():
     # ax = gcode_reader.plot_mesh_layer(1)
 
     # test animation (this is outdated)
-    # gcode_reader.animate_layers(min_layer=1, max_layer=2)
+    # gcode_reader.animate_layers(min_layer=1, max_layer=10,
+    #        outfile='../movies/arm.mp4')
     # gcode_reader.animate_layer(layer=1, animation_time=5)
     # ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
     # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
