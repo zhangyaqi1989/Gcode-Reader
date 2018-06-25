@@ -35,6 +35,9 @@ It supports the following functionalities
 # 17. add margin to animate_layer (done)
 # 18. add animation of subplots (done)
 # 19. add margin to animate_layers
+# 20. add -s optional to save file (done)
+# 21. change return ax to return fig, ax (done)
+# 22. add create_axis() (done)
 ##################################
 
 # standard library
@@ -59,7 +62,54 @@ sns.set()  # use seaborn style
 pp = pprint.PrettyPrinter(indent=4)
 
 
+def save_figure(fig, filename, dpi):
+    """
+    save figure to a file
+
+    Args:
+        fig: figure object
+        filename: outfilename
+        dpi: dpi of the figure
+    """
+    _, ext = filename.rsplit('.', 1)
+    fig.savefig(filename, format=ext, dpi=dpi, bbox_inches='tight')
+    print('saving to {:s} with {:d} DPI'.format(filename, dpi))
+
+
+def create_axis(figsize=(8, 8), projection='2d'):
+    """
+    create axis based on figure size and projection
+    returns fig, ax
+
+    Args:
+        figsize: size of the figure
+        projection: dimension of figure
+
+    Returns:
+        fig, ax
+    """
+    projection = projection.lower()
+    if projection not in ['2d', '3d']:
+        raise ValueError
+    if projection == '2d':
+        fig, ax = plt.subplots(figsize=figsize)
+    else:  # '3d'
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection='3d')
+    return fig, ax
+
+
 def create_movie_writer(title='Movie Writer', fps=15):
+    """
+    create ffmpeg writer
+
+    Args:
+        title: title of the movie writer
+        fps: frames per second
+
+    Returns:
+        movie writer
+    """
     FFMpegWriter = manimation.writers['ffmpeg']
     metadata = dict(title=title, artist='Matplotlib',
                     comment='Movie Support')
@@ -67,9 +117,19 @@ def create_movie_writer(title='Movie Writer', fps=15):
     return writer
 
 
-def add_margin_to_axis_limits(min_v, max_v, margin=0.1):
-    """compute new min_v and max_v based on margin"""
-    dv = (max_v - min_v) * margin
+def add_margin_to_axis_limits(min_v, max_v, margin_ratio=0.1):
+    """
+    compute new min_v and max_v based on margin
+
+    Args:
+        min_v: minimum value
+        max_v: maximum value
+        margin_ratio:
+
+    Returns:
+        new_min_v, new_max_v
+    """
+    dv = (max_v - min_v) * margin_ratio
     return (min_v - dv, max_v + dv)
 
 
@@ -146,26 +206,25 @@ class GcodeReader:
         if not self.elements:
             self.mesh(max_length=1)
         if not ax:
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = create_axis(projection='2d')
         left, right = self.elements_index_bars[layernum - 1:layernum + 1]
         for x0, y0, x1, y1, _ in self.elements[left:right]:
             ax.plot([x0, x1], [y0, y1], 'b-')
             # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
             ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=4)
-        return ax
+        return fig, ax
 
     def plot_mesh(self, ax=None):
         """ plot mesh """
         if not self.elements:
             self.mesh()
         if not ax:
-            fig = plt.figure(figsize=(8, 8))
-            ax = fig.add_subplot(111, projection='3d')
+            fig, ax = create_axis(projection='3d')
         for x0, y0, x1, y1, z in self.elements:
             ax.plot([x0, x1], [y0, y1], [z, z], 'b-')
             ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), z, 'r', s=4,
                        color='r')
-        return ax
+        return fig, ax
 
     def _read(self):
         """
@@ -342,13 +401,12 @@ class GcodeReader:
     def plot(self, color='blue', ax=None):
         """ plot the whole part in 3D """
         if not ax:
-            fig = plt.figure(figsize=(8, 8))
-            ax = fig.add_subplot(111, projection='3d')
+            fig, ax = create_axis(projection='3d')
         assert(self.n_segs > 0)
         self._compute_subpaths()
         for xs, ys, zs in self.subpaths:
             ax.plot(xs, ys, zs)
-        return ax
+        return fig, ax
 
     def plot_layers(self, min_layer, max_layer, ax=None):
         """ plot the layers in [min_layer, max_layer) in 3D """
@@ -357,13 +415,12 @@ class GcodeReader:
             raise LayerError("Layer number is invalid!")
         self._compute_subpaths()
         if not ax:
-            fig = plt.figure(figsize=(8, 8))
-            ax = fig.add_subplot(111, projection='3d')
+            fig, ax = create_axis(projection='3d')
         left, right = (self.subpath_index_bars[min_layer - 1],
                        self.subpath_index_bars[max_layer - 1])
         for xs, ys, zs in self.subpaths[left: right]:
             ax.plot(xs, ys, zs)
-        return ax
+        return fig, ax
 
     def plot_layer(self, layer=1, ax=None):
         """ plot a specific layer in 2D """
@@ -373,15 +430,13 @@ class GcodeReader:
         if layer < 1 or layer > self.n_layers:
             raise LayerError("Layer number is invalid!")
         self._compute_subpaths()
-        # fig = plt.figure(figsize=(8, 8))
-        # ax = fig.add_subplot(111)
         if not ax:
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = create_axis(projection='2d')
         left, right = (self.subpath_index_bars[layer - 1],
                        self.subpath_index_bars[layer])
         for xs, ys, _ in self.subpaths[left: right]:
             ax.plot(xs, ys)
-        return ax
+        return fig, ax
 
     def describe_mesh(self, max_length):
         """print basic information of meshing"""
@@ -448,11 +503,10 @@ class GcodeReader:
         """
         if layer < 1 or layer > self.n_layers:
             raise LayerError("Layer number is invalid!")
-        fig = plt.figure(figsize=(8, 8))
+        fig, ax = create_axis(projection='2d')
         if outfile:
             writer = create_movie_writer()
             writer.setup(fig, outfile=outfile, dpi=100)
-        ax = fig.add_subplot(111)
         xmin, xmax, ymin, ymax, _, _ = self.xyzlimits
         # ax.set_xlim([xmin, xmax])
         # ax.set_ylim([ymin, ymax])
@@ -487,8 +541,7 @@ class GcodeReader:
             raise LayerError("Layer number is invalid!")
         left, right = (self.subpath_index_bars[min_layer - 1],
                        self.subpath_index_bars[max_layer - 1])
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection='3d')
+        fig, ax = create_axis(projection='3d')
         if outfile:
             writer = create_movie_writer()
             writer.setup(fig, outfile=outfile, dpi=100)
@@ -513,7 +566,8 @@ class GcodeReader:
 def get_parser():
     """set up parser and return it"""
     parser = argparse.ArgumentParser(description='Gcode Reader')
-    parser.add_argument(dest='gcode_file', help='gcode file', action='store')
+    parser.add_argument(dest='gcode_file', action='store',
+            help='specify path of the input gcode file')
     parser.add_argument('-t', '--type', dest='filetype', help="""File Type
             1: regular FDM; 2: Stratasys FDM; 3: LPBF""",
                         required=True, type=int, action='store')
@@ -525,6 +579,8 @@ def get_parser():
                         type=int, help='plot the mesh of a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
+    parser.add_argument('-s', '--save', dest='outfile', action='store',
+                        help='specify the path of output file')
     return parser
 
 
@@ -550,32 +606,33 @@ def command_line_runner():
     gcode_reader.describe_mesh(max_length=1)
     # 4. plot the whole part or a layer
     if args.plot3d:
-        ax = gcode_reader.plot()
+        fig, ax = gcode_reader.plot()
     else:
         if args.plot_layer_idx:
-            ax = gcode_reader.plot_layer(layer=args.plot_layer_idx)
+            fig, ax = gcode_reader.plot_layer(layer=args.plot_layer_idx)
         elif args.ani_layer_idx:
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
-                # outfile='../movies/tweety_layer1.mp4')
+            # outfile='../movies/tweety_layer1.mp4')
         elif args.mesh_layer_idx:
-            ax = gcode_reader.plot_mesh_layer(layernum=1)
+            fig, ax = gcode_reader.plot_mesh_layer(layernum=1)
+
 
     # 5. test mesh
     # gcode_reader.mesh(max_length=1)
     # print(len(gcode_reader.elements))
     # gcode_reader.plot_mesh()
-    # ax = gcode_reader.plot_mesh_layer(1)
+    # fig, ax = gcode_reader.plot_mesh_layer(1)
 
     # test animation (this is outdated)
     # gcode_reader.animate_layers(min_layer=1, max_layer=10,
     #        outfile='../movies/arm.mp4')
     # gcode_reader.animate_layer(layer=1, animation_time=5)
-    # ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
+    # fig, ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
     # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
     # gcode_reader.plot()
 
     # specify title and x, y label
-    if args.plot3d or args.plot_layer_idx:
+    if args.plot3d or args.plot_layer_idx or args.mesh_layer_idx:
         _, filename = args.gcode_file.rsplit(os.path.sep, 1)
         ax.set_title(filename)
         ax.set_xlabel('x')
@@ -583,6 +640,9 @@ def command_line_runner():
         if ax.name == '3d':
             ax.set_zlabel('z')
         ax.axis('equal')
+
+    if args.outfile:
+        save_figure(fig, args.outfile, dpi=100)
     plt.show()
 
 
