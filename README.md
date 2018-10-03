@@ -5,10 +5,12 @@ A Gcode visulization and analysis tool written in python. It supports FDM Gcode,
 
 * Animation of Printint Single Layer in 2D
 [![animation2d](images/tweety2d.png)](https://youtu.be/0pambiz2EeM)
+
 **[click above figure to play]**
 
 * Animation of Printing Multiple Layers in 3D
 [![animation3d](images/mobius3d.png)](https://youtu.be/n16rB9qlLmw)
+
 **[click above figure to play]**
 
 * Plot a single layer in 2D
