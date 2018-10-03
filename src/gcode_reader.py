@@ -12,33 +12,6 @@ It supports the following functionalities
 3. animate the printing of a layer in 2D, animate the printing of layers in 3D
 4. mesh the path, plot mesh, list important informations about the mesh
 """
-##################################
-# TODO List and Development log:
-# 1. number of subpaths (done)
-# 2. number of nozzle travels (done)
-# 3. total distance (done)
-# 4. number of elements in each layer (done)
-# 5. save limits in ds and show it in describe() method (done)
-# 6. add comments to introduce each attribute in GcodeReader class
-# 7. add mesh method and mesh plot (done)
-# 8. add ax arg to plot() method (done)
-# 9. add animate_layer() by animating printing segs (done)
-# 10. add min_layer and max_layer args to animate_layers() (done)
-# 11. add -a optional arg for animation (done)
-# 12. update readme (done)
-# 13. add some analysis for powers (done)
-# 13. add some post-process (like temperature gradient analysis) (done)
-# create a new project called postprocess and preprocess (done)
-# 14. finish plot_mesh_layer() method (done)
-# 15. add analyze elements method (done)
-# 16. add -m optional arg for mesh plot (done)
-# 17. add margin to animate_layer (done)
-# 18. add animation of subplots (done)
-# 19. add margin to animate_layers
-# 20. add -s optional to save file (done)
-# 21. change return ax to return fig, ax (done)
-# 22. add create_axis() (done)
-##################################
 
 # standard library
 import argparse
@@ -530,12 +503,14 @@ class GcodeReader:
             print('Creating movie {:s}'.format(outfile))
         plt.show()
 
-    def animate_layers(self, min_layer, max_layer, outfile=None):
+    def animate_layers(self, min_layer, max_layer=None, outfile=None):
         """
         animation of the print process of multiple layers [min_layer,
         max_layer)
         implement with plt.pause() and plt.draw()
         """
+        if max_layer is None:
+            max_layer = self.n_layers + 1
         if (min_layer >= max_layer or min_layer < 1 or max_layer >
                 self.n_layers + 1):
             raise LayerError("Layer number is invalid!")
@@ -626,6 +601,8 @@ def command_line_runner():
     # test animation (this is outdated)
     # gcode_reader.animate_layers(min_layer=1, max_layer=10,
     #        outfile='../movies/arm.mp4')
+    gcode_reader.animate_layers(min_layer=1, max_layer=None,
+            outfile='../movies/arm-whole.mp4')
     # gcode_reader.animate_layer(layer=1, animation_time=5)
     # fig, ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
     # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
