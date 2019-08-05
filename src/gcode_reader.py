@@ -601,8 +601,8 @@ def command_line_runner():
     # test animation (this is outdated)
     # gcode_reader.animate_layers(min_layer=1, max_layer=10,
     #        outfile='../movies/arm.mp4')
-    gcode_reader.animate_layers(min_layer=1, max_layer=None,
-            outfile='../movies/arm-whole.mp4')
+    # gcode_reader.animate_layers(min_layer=1, max_layer=None,
+    #        outfile='../movies/arm-whole.mp4')
     # gcode_reader.animate_layer(layer=1, animation_time=5)
     # fig, ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
     # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
@@ -616,7 +616,7 @@ def command_line_runner():
         ax.set_ylabel('y')
         if ax.name == '3d':
             ax.set_zlabel('z')
-        ax.axis('equal')
+        # ax.axis('equal')
 
     if args.outfile:
         save_figure(fig, args.outfile, dpi=100)
