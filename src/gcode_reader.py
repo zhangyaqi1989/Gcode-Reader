@@ -29,7 +29,13 @@ import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 
-sns.set()  # use seaborn style
+# sns.set()  # use seaborn style
+
+# maximum element length in meshing
+MAX_ELEMENT_LENGTH = 2.5
+
+# set true to add axis-label and title
+FIG_INFO = False
 
 # global variables
 pp = pprint.PrettyPrinter(indent=4)
@@ -177,14 +183,14 @@ class GcodeReader:
     def plot_mesh_layer(self, layernum, ax=None):
         """ plot mesh in one layer """
         if not self.elements:
-            self.mesh(max_length=1)
+            self.mesh(max_length=MAX_ELEMENT_LENGTH)
         if not ax:
             fig, ax = create_axis(projection='2d')
         left, right = self.elements_index_bars[layernum - 1:layernum + 1]
         for x0, y0, x1, y1, _ in self.elements[left:right]:
             ax.plot([x0, x1], [y0, y1], 'b-')
             # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
-            ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=4)
+            ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=1.5)
         return fig, ax
 
     def plot_mesh(self, ax=None):
@@ -578,7 +584,7 @@ def command_line_runner():
     gcode_reader = GcodeReader(filename=args.gcode_file, filetype=filetype)
     # 3. print out some statistic information to standard output
     gcode_reader.describe()
-    gcode_reader.describe_mesh(max_length=1)
+    gcode_reader.describe_mesh(max_length=MAX_ELEMENT_LENGTH)
     # 4. plot the whole part or a layer
     if args.plot3d:
         fig, ax = gcode_reader.plot()
@@ -589,11 +595,12 @@ def command_line_runner():
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
             # outfile='../movies/tweety_layer1.mp4')
         elif args.mesh_layer_idx:
-            fig, ax = gcode_reader.plot_mesh_layer(layernum=1)
+            # print("Plot MESHING")
+            fig, ax = gcode_reader.plot_mesh_layer(layernum=args.mesh_layer_idx)
 
 
     # 5. test mesh
-    # gcode_reader.mesh(max_length=1)
+    # gcode_reader.mesh(max_length=MAX_ELEMENT_LENGTH)
     # print(len(gcode_reader.elements))
     # gcode_reader.plot_mesh()
     # fig, ax = gcode_reader.plot_mesh_layer(1)
@@ -610,12 +617,17 @@ def command_line_runner():
 
     # specify title and x, y label
     if args.plot3d or args.plot_layer_idx or args.mesh_layer_idx:
-        _, filename = args.gcode_file.rsplit(os.path.sep, 1)
-        ax.set_title(filename)
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        if ax.name == '3d':
-            ax.set_zlabel('z')
+        if FIG_INFO:
+            _, filename = args.gcode_file.rsplit(os.path.sep, 1)
+            ax.set_title(filename)
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            if ax.name == '3d':
+                ax.set_zlabel('z')
+        else:
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.axis('off')
         # ax.axis('equal')
 
     if args.outfile:
