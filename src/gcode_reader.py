@@ -34,6 +34,9 @@ import pandas as pd
 # maximum element length in meshing
 MAX_ELEMENT_LENGTH = 2.5
 
+# PLOT Support
+PLOT_SUPPORT = True
+
 # set true to add axis-label and title
 FIG_INFO = False
 
@@ -321,6 +324,9 @@ class GcodeReader:
             # means position denoted by the line is the start of subpath
             is_start = True
             for line in lines:
+                # filter out supports path
+                if not PLOT_SUPPORT and 'True' in line:
+                    continue
                 if line.startswith('#'):
                     continue
                 if not line.strip():  # skip empty line
@@ -355,6 +361,7 @@ class GcodeReader:
     def _compute_subpaths(self):
         """ compute subpaths
             a subpath is represented by (xs, ys, zs)
+            subpath makes it easier to plot
         """
         if not self.subpaths:
             self.subpaths = []
