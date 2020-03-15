@@ -18,7 +18,7 @@ It supports the following functionalities
 import argparse
 import collections
 from enum import Enum
-# import math
+import math
 import os.path
 import pprint
 import sys
@@ -27,9 +27,10 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as manimation
-import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
+import seaborn as sns
+import statistics
 
 sns.set()  # use seaborn style
 
@@ -186,7 +187,8 @@ class GcodeReader:
                 # self.elements.append((x0, y0, x0 + dx, y0 + dy, z))
                 self.elements.append(Element(x0, y0, x0 + dx, y0 + dy, z))
                 x0, y0 = x0 + dx, y0 + dy
-            self.elements.append((x0, y0, x1, y1, z))
+            # self.elements.append((x0, y0, x1, y1, z))
+            self.elements.append(Element(x0, y0, x1, y1, z))
         self.elements_index_bars.append(n_eles)
         # print(self.elements_index_bars)
         print("Meshing finished, {:d} elements generated".
@@ -393,12 +395,54 @@ class GcodeReader:
             # print(self.subpath_index_bars)
             # print(self.segs)
 
+
+    def _compute_center_distance(self, i, j):
+        """compute center distance between element i and j."""
+        n = len(self.elements)
+        assert(i < n and j < n)
+        elements = self.elements
+        ax = 0.5 * (elements[i].x0 + elements[i].x1)
+        ay = 0.5 * (elements[i].y0 + elements[i].y1)
+        bx = 0.5 * (elements[j].x0 + elements[j].x1)
+        by = 0.5 * (elements[j].y0 + elements[j].y1)
+        return math.sqrt((ax - bx) ** 2 + (ay - by) ** 2)
+
+
+    def _compute_parallel_distance(self, i, j):
+        """compute the parallel distance between element i and j."""
+        n = len(self.elements)
+        assert(i < n and j < n)
+        elements = self.elements
+        x = 0.5 * (elements[i].x0 + elements[i].x1)
+        y = 0.5 * (elements[i].y0 + elements[i].y1)
+        ax, ay, bx, by, _ = elements[j]
+        dx = ax - bx
+        dy = ay - by
+        deno = math.sqrt(dx * dx + dy * dy)
+        nume = abs((by - ay) * x - (bx - ax) * y + bx * ay - by * ax)
+        return nume / deno
+
+
+    def _is_element_nearly_parallel(self, i, j, threshold):
+        """check if element i and element j are nearly parallel."""
+        n = len(self.elements)
+        assert(i < n and j < n)
+        elements = self.elements
+        ax, ay, bx, by, _ = elements[i]
+        cx, cy, dx, dy, _ = elements[j]
+        dx1 = bx - ax
+        dy1 = by - ay
+        dx2 = dx - cx
+        dy2 = dy - cy
+        cos_theta = abs((dx1 * dx2 + dy1 * dy2) / (math.sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2))))
+        return True if 1 - cos_theta < threshold else False
+
     def _is_element_left(self, i, j):
         """check if element j is on the left of element i."""
         n = len(self.elements)
-        elements = self.elements
         assert(i < n and j < n)
-        assert(elements[i].z == elements[j].z)
+        assert(self.elements[i].z == self.elements[j].z)
+        elements = self.elements
         ax, ay, bx, by, _ = elements[i]
         cx = 0.5 * (elements[j].x0 + elements[j].x1)
         cy = 0.5 * (elements[j].y0 + elements[j].y1)
@@ -408,12 +452,80 @@ class GcodeReader:
         else:
             return 1 if cross_product > 0 else -1
 
-    def compute_nearest_neighbors(self):
+
+    def compute_nearest_neighbors(self, layer=0):
         """compute nearest neighbors for each element."""
         if not self.elements:
             self.mesh(max_length=MAX_ELEMENT_LENGTH)
-        # print(self.elements)
-        # print(self.elements_index_bars)
+        start_idx, end_idx = self.elements_index_bars[layer - 1:layer + 1]
+        INF = math.inf
+        left_neis = []
+        right_neis = []
+        for i in range(start_idx, end_idx):
+            left_mn = INF
+            right_mn = INF
+            # left_is_left = 0
+            # right_is_left = 0
+            left_idx = -1
+            right_idx = -1
+            for j in range(start_idx, end_idx):
+                if j == i:
+                    continue
+                if self._is_element_nearly_parallel(i, j, 0.0001) and self._compute_center_distance(i, j) < 2:
+                    is_left = self._is_element_left(i, j)
+                    distance = self._compute_parallel_distance(i, j)
+                    if distance < 0.5:
+                        continue
+                    if is_left == 1:
+                        if distance < left_mn:
+                            left_idx = j
+                            left_mn = distance
+                    elif is_left == -1:
+                        if distance < right_mn:
+                            right_idx = j
+                            right_mn = distance
+            # print("{:d} {:f} {:f}".format(i, left_mn, right_mn))
+            # if left_mn > 5:
+            left_neis.append((left_idx, left_mn))
+            right_neis.append((right_idx, right_mn))
+        return left_neis, right_neis
+
+
+    def plot_neighbors_layer(self, layer=0):
+        """plot neighbors in a layer."""
+        left_neis, right_neis = self.compute_nearest_neighbors(layer)
+        fig, ax = self.plot_mesh_layer(layer)
+        left, right = self.elements_index_bars[layer - 1:layer + 1]
+        # print(left, right)
+        es = self.elements
+        for idx, (x0, y0, x1, y1, _) in enumerate(self.elements[left:right]):
+            xc = 0.5 * (x0 + x1)
+            yc = 0.5 * (y0 + y1)
+            # ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=1.5)
+            left_idx, left_mn = left_neis[idx]
+            if left_idx != -1:
+                lx = 0.5 * (es[left_idx].x0 + es[left_idx].x1)
+                ly = 0.5 * (es[left_idx].y0 + es[left_idx].y1)
+                # print(left_mn, math.sqrt((lx - xc) ** 2 + (ly - yc) ** 2),self._compute_parallel_distance(idx, left_idx))
+                ax.plot([xc, lx], [yc, ly], 'r-')
+            right_idx, right_mn = right_neis[idx]
+            if right_idx != -1:
+                rx = 0.5 * (es[right_idx].x0 + es[right_idx].x1)
+                ry = 0.5 * (es[right_idx].y0 + es[right_idx].y1)
+                # print(left_mn, math.sqrt((lx - xc) ** 2 + (ly - yc) ** 2),self._compute_parallel_distance(idx, left_idx))
+                ax.plot([xc, rx], [yc, ry], 'r-')
+        # plot histogram
+        left_mns = [mn for idx, mn in left_neis if idx != -1]
+        print("left median = {}".format(statistics.median(left_mns)))
+        print("left mean = {}".format(statistics.mean(left_mns)))
+        print("left min = {}".format(min(left_mns)))
+        right_mns = [mn for idx, mn in right_neis if idx != -1]
+        print("right median = {}".format(statistics.median(right_mns)))
+        print("right mean = {}".format(statistics.mean(right_mns)))
+        print("right min = {}".format(min(right_mns)))
+        fig2, ax2 = plt.subplots(figsize=(8, 8))
+        ax2.boxplot(left_mns)
+        return fig, ax
 
     def plot(self, color='blue', ax=None):
         """ plot the whole part in 3D """
@@ -600,8 +712,8 @@ def get_parser():
                         help='plot the whole part')
     parser.add_argument('-s', '--save', dest='outfile', action='store',
                         help='specify the path of output file')
-    parser.add_argument('-n', '--neighbor', dest='compute_neighbor',
-            action='store_true', help='compute nearest neighbor of each element')
+    parser.add_argument('-n', '--neighbor', dest='neighbor_layer_idx',
+            action='store', default=-1, type=int, help='plot nearest neighbor of each element')
     return parser
 
 
@@ -655,8 +767,9 @@ def command_line_runner():
     # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
     # gcode_reader.plot()
 
-    if args.compute_neighbor:
-        gcode_reader.compute_nearest_neighbors()
+    if args.neighbor_layer_idx != -1:
+        # gcode_reader.compute_nearest_neighbors()
+        fig, ax = gcode_reader.plot_neighbors_layer(layer=args.neighbor_layer_idx)
 
     # specify title and x, y label
     if args.plot3d or args.plot_layer_idx or args.mesh_layer_idx:
