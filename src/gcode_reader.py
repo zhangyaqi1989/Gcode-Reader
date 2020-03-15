@@ -11,10 +11,12 @@ It supports the following functionalities
 2. list important information of path
 3. animate the printing of a layer in 2D, animate the printing of layers in 3D
 4. mesh the path, plot mesh, list important informations about the mesh
+5. compute closest left element and right element
 """
 
 # standard library
 import argparse
+import collections
 from enum import Enum
 # import math
 import os.path
@@ -29,7 +31,7 @@ import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 
-# sns.set()  # use seaborn style
+sns.set()  # use seaborn style
 
 # maximum element length in meshing
 MAX_ELEMENT_LENGTH = 2.5
@@ -37,8 +39,14 @@ MAX_ELEMENT_LENGTH = 2.5
 # PLOT Support
 PLOT_SUPPORT = True
 
+# Element namedtuple
+Element = collections.namedtuple('Element', ['x0', 'y0', 'x1', 'y1', 'z'])
+
 # set true to add axis-label and title
 FIG_INFO = False
+
+# zero tolerance for is_left check
+ZERO_TOLERANCE = 1e-8
 
 # global variables
 pp = pprint.PrettyPrinter(indent=4)
@@ -175,7 +183,8 @@ class GcodeReader:
             dx = (x1 - x0) / n_slices
             dy = (y1 - y0) / n_slices
             for _ in range(n_slices - 1):
-                self.elements.append((x0, y0, x0 + dx, y0 + dy, z))
+                # self.elements.append((x0, y0, x0 + dx, y0 + dy, z))
+                self.elements.append(Element(x0, y0, x0 + dx, y0 + dy, z))
                 x0, y0 = x0 + dx, y0 + dy
             self.elements.append((x0, y0, x1, y1, z))
         self.elements_index_bars.append(n_eles)
@@ -384,6 +393,28 @@ class GcodeReader:
             # print(self.subpath_index_bars)
             # print(self.segs)
 
+    def _is_element_left(self, i, j):
+        """check if element j is on the left of element i."""
+        n = len(self.elements)
+        elements = self.elements
+        assert(i < n and j < n)
+        assert(elements[i].z == elements[j].z)
+        ax, ay, bx, by, _ = elements[i]
+        cx = 0.5 * (elements[j].x0 + elements[j].x1)
+        cy = 0.5 * (elements[j].y0 + elements[j].y1)
+        cross_product = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
+        if abs(cross_product) < ZERO_TOLERANCE:
+            return 0
+        else:
+            return 1 if cross_product > 0 else -1
+
+    def compute_nearest_neighbors(self):
+        """compute nearest neighbors for each element."""
+        if not self.elements:
+            self.mesh(max_length=MAX_ELEMENT_LENGTH)
+        # print(self.elements)
+        # print(self.elements_index_bars)
+
     def plot(self, color='blue', ax=None):
         """ plot the whole part in 3D """
         if not ax:
@@ -391,7 +422,7 @@ class GcodeReader:
         assert(self.n_segs > 0)
         self._compute_subpaths()
         for xs, ys, zs in self.subpaths:
-            ax.plot(xs, ys, zs)
+            ax.plot(xs, ys, zs, color=color)
         return fig, ax
 
     def plot_layers(self, min_layer, max_layer, ax=None):
@@ -569,6 +600,8 @@ def get_parser():
                         help='plot the whole part')
     parser.add_argument('-s', '--save', dest='outfile', action='store',
                         help='specify the path of output file')
+    parser.add_argument('-n', '--neighbor', dest='compute_neighbor',
+            action='store_true', help='compute nearest neighbor of each element')
     return parser
 
 
@@ -621,6 +654,9 @@ def command_line_runner():
     # fig, ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
     # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
     # gcode_reader.plot()
+
+    if args.compute_neighbor:
+        gcode_reader.compute_nearest_neighbors()
 
     # specify title and x, y label
     if args.plot3d or args.plot_layer_idx or args.mesh_layer_idx:
