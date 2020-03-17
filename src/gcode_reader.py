@@ -40,7 +40,8 @@ import statistics
 sns.set()  # use seaborn style
 
 # maximum element length in meshing
-MAX_ELEMENT_LENGTH = 2.5
+# MAX_ELEMENT_LENGTH = 2.5
+MAX_ELEMENT_LENGTH = 50e-6
 
 # PLOT Support
 PLOT_SUPPORT = True
@@ -52,10 +53,21 @@ Element = collections.namedtuple('Element', ['x0', 'y0', 'x1', 'y1', 'z'])
 FIG_INFO = False
 
 # zero tolerance for is_left check
-ZERO_TOLERANCE = 1e-8
+ZERO_TOLERANCE = 1e-12
 
 # global variables
 pp = pprint.PrettyPrinter(indent=4)
+
+# plot polygon
+# HALF_WIDTH = 0.6
+HALF_WIDTH = 50e-6
+
+# current 0.5 mm = 500 mu, target 50 mu
+HORIZONTAL_SHRINK_RATIO = 0.0001
+DELTA_Z = 2e-5
+
+LASER_POWER = 195
+LASER_SPEED = 0.8
 
 
 def save_figure(fig, filename, dpi):
@@ -212,6 +224,20 @@ class GcodeReader:
             # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
             ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=1.5)
         return fig, ax
+
+    def convert_to_scode(self):
+        """ convert path to scode file. """
+        name, _ = self.filename.rsplit('.', 1)
+        outpath = "{}.scode".format(name)
+        with open(outpath, 'w') as out_f:
+            out_f.write('# x1 y1 x2 y2 z power speed \n')
+            for x0, y0, x1, y1, z in self.segs:
+                x0 *= HORIZONTAL_SHRINK_RATIO
+                y0 *= HORIZONTAL_SHRINK_RATIO
+                x1 *= HORIZONTAL_SHRINK_RATIO
+                y1 *= HORIZONTAL_SHRINK_RATIO
+                out_f.write("{:.8f} {:.8f} {:.8f} {:.8f} {:.8f} {:d} {:.4f}\n".format(x0, y0, x1, y1, z, LASER_POWER, LASER_SPEED))
+        print('Save path to s-code file {}'.format(outpath))
 
     def plot_mesh(self, ax=None):
         """ plot mesh """
@@ -507,11 +533,13 @@ class GcodeReader:
             for j in range(start_idx, end_idx):
                 if j == i:
                     continue
-                if self._is_element_nearly_parallel(i, j, 0.0001) and self._compute_center_distance(i, j) < 2:
+                if (self._is_element_nearly_parallel(i, j, 0.0001) and
+                self._compute_center_distance(i, j) < 2.0 * HALF_WIDTH * 2):
                     is_left = self._is_element_left(i, j)
                     distance = self._compute_parallel_distance(i, j)
-                    if distance < 0.5:
+                    if distance < 0.4 * HALF_WIDTH * 2:
                         continue
+                    # print(distance, is_left)
                     if is_left == 1:
                         if distance < left_mn:
                             left_idx = j
@@ -572,7 +600,6 @@ class GcodeReader:
         left, right = self.elements_index_bars[layer - 1:layer + 1]
         # print(left, right)
         es = self.elements
-        HALF_WIDTH = 0.6
         for idx, (sx, sy, ex, ey, _) in enumerate(self.elements[left:right]):
             reverse = False
             if sx > ex or ey < sy:
@@ -787,6 +814,8 @@ def get_parser():
                         type=int, help='plot the mesh of a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
+    parser.add_argument('-conv', '--convert', dest='convert', action='store_true', 
+                        help='convert FDM path to LPBF scode.')
     parser.add_argument('-s', '--save', dest='outfile', action='store',
                         help='specify the path of output file')
     parser.add_argument('-nei', '--neighbor', dest='neighbor_layer_idx',
@@ -829,7 +858,8 @@ def command_line_runner():
             # print("Plot MESHING")
             fig, ax = gcode_reader.plot_mesh_layer(layernum=args.mesh_layer_idx)
 
-
+    if args.convert:
+        gcode_reader.convert_to_scode()
     # 5. test mesh
     # gcode_reader.mesh(max_length=MAX_ELEMENT_LENGTH)
     # print(len(gcode_reader.elements))
