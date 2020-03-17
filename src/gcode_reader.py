@@ -139,7 +139,8 @@ class GcodeType(Enum):
 
     FDM_REGULAR = 1
     FDM_STRATASYS = 2
-    LPBF = 3
+    LPBF_REGULAR = 3
+    LPBF_SCODE = 4
 
     @classmethod
     def has_value(cls, value):
@@ -233,8 +234,10 @@ class GcodeReader:
             self._read_fdm_regular()
         elif self.filetype == GcodeType.FDM_STRATASYS:
             self._read_fdm_stratasys()
-        elif self.filetype == GcodeType.LPBF:
-            self._read_lpbf()
+        elif self.filetype == GcodeType.LPBF_REGULAR:
+            self._read_lpbf_regular()
+        elif self.filetype == GcodeType.LPBF_SCODE:
+            self._read_lpbf_scode()
         else:
             print("file type is not supported")
             sys.exit(1)
@@ -254,9 +257,9 @@ class GcodeReader:
             zmax = z if z > zmax else zmax
         return (xmin, xmax, ymin, ymax, zmin, zmax)
 
-    def _read_lpbf(self):
-        """ read LPBF gcode """
-        with open(self.filename) as infile:
+    def _read_lpbf_regular(self):
+        """ read regular LPBF gcode """
+        with open(self.filename, 'r') as infile:
             # read nonempty lines
             lines = (line.strip() for line in infile.readlines()
                      if line.strip())
@@ -291,9 +294,37 @@ class GcodeReader:
         # print(self.n_layers)
         assert(len(self.seg_index_bars) - self.n_layers == 1)
 
+    def _read_lpbf_scode(self):
+        """ read LPBF scode """
+        with open(self.filename, 'r') as infile:
+            # read nonempty lines
+            lines = (line.strip() for line in infile.readlines()
+                    if line.strip())
+            # only keep line that not starts with '#'
+            lines = (line for line in lines if not line.startswith('#'))
+        # pp.pprint(lines) # for debug
+        self.segs = []
+        self.powers = []
+        seg_count = 0
+        old_z = -np.inf
+        for line in lines:
+            x0, y0, x1, y1, z, power, speed = map(float, line.split())
+            if z > old_z:
+                self.n_layers += 1
+                self.seg_index_bars.append(seg_count)
+                old_z = z
+            self.segs.append((x0, y0, x1, y1, z))
+            self.powers.append(power)
+            seg_count += 1
+        self.n_segs = len(self.segs)
+        self.segs = np.array(self.segs)
+        print(self.segs)
+        self.seg_index_bars.append(self.n_segs)
+        assert(len(self.seg_index_bars) - self.n_layers == 1)
+
     def _read_fdm_regular(self):
         """ read fDM regular gcode type """
-        with open(self.filename) as infile:
+        with open(self.filename, 'r') as infile:
             # read nonempty lines
             lines = (line.strip() for line in infile.readlines()
                      if line.strip())
@@ -663,7 +694,7 @@ class GcodeReader:
             travels.append(abs(xsj[0] - xsi[-1]) + abs(ysj[0] - ysi[-1])
                            + abs(zsj[0] - zsi[-1]))
         print("Total travel length equals {:0.4f}.".format(sum(travels)))
-        if self.filetype == GcodeType.LPBF:
+        if self.filetype == GcodeType.LPBF_REGULAR or self.filetype == GcodeType.LPBF_SCODE:
             print("Laser power range [{}, {}]".format(
                 min(self.powers), max(self.powers)))
         print("Number of nozzle travels equals {:d}.".format(
@@ -746,7 +777,7 @@ def get_parser():
     parser.add_argument(dest='gcode_file', action='store',
             help='specify path of the input gcode file')
     parser.add_argument('-t', '--type', dest='filetype', help="""File Type
-            1: regular FDM; 2: Stratasys FDM; 3: LPBF""",
+            1: Regular FDM; 2: Stratasys FDM; 3: Regular LPBF; 4: Scode LPBF""",
                         required=True, type=int, action='store')
     parser.add_argument('-l', '--layer', dest='plot_layer_idx', action='store',
                         type=int, help='plot a layer in 2D')
