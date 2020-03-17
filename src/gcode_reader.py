@@ -12,6 +12,11 @@ It supports the following functionalities
 3. animate the printing of a layer in 2D, animate the printing of layers in 3D
 4. mesh the path, plot mesh, list important informations about the mesh
 5. compute closest left element and right element
+
+
+FINDINGS:
+1. octopus: 0.60 mm half width
+2. tweety:  0.60 mm half width
 """
 
 # standard library
@@ -519,13 +524,54 @@ class GcodeReader:
         print("left median = {}".format(statistics.median(left_mns)))
         print("left mean = {}".format(statistics.mean(left_mns)))
         print("left min = {}".format(min(left_mns)))
+        print("left max = {}".format(max(left_mns)))
         right_mns = [mn for idx, mn in right_neis if idx != -1]
         print("right median = {}".format(statistics.median(right_mns)))
         print("right mean = {}".format(statistics.mean(right_mns)))
         print("right min = {}".format(min(right_mns)))
+        print("right max = {}".format(max(right_mns)))
         fig2, ax2 = plt.subplots(figsize=(8, 8))
         ax2.boxplot(left_mns)
         return fig, ax
+
+    def plot_polygon_layer(self, layer):
+        """plot element polygons in one layer. """
+        left_neis, right_neis = self.compute_nearest_neighbors(layer)
+        fig, ax = self.plot_mesh_layer(layer)
+        left, right = self.elements_index_bars[layer - 1:layer + 1]
+        # print(left, right)
+        es = self.elements
+        HALF_WIDTH = 0.6
+        for idx, (sx, sy, ex, ey, _) in enumerate(self.elements[left:right]):
+            reverse = False
+            if sx > ex or ey < sy:
+                sx, sy, ex, ey = ex, ey, sx, sy
+                reverse = True
+            dx = ex - sx
+            dy = ey - sy
+            theta = np.arctan2(dy, dx)
+            beta = theta + np.pi / 2.0
+            lw = HALF_WIDTH
+            left_idx, left_mn = left_neis[idx]
+            if left_mn / 2 < lw:
+                lw = left_mn / 2
+            rw = HALF_WIDTH
+            right_idx, right_mn = right_neis[idx]
+            if right_mn / 2 < rw:
+                rw = right_mn / 2
+            if reverse:
+                lw, rw = rw, lw
+            x1 = sx - rw * np.cos(beta)
+            y1 = sy - rw * np.sin(beta)
+            x2 = ex - rw * np.cos(beta)
+            y2 = ey - rw * np.sin(beta)
+            x3 = ex + lw * np.cos(beta)
+            y3 = ey + lw * np.sin(beta)
+            x4 = sx + lw * np.cos(beta)
+            y4 = sy + lw * np.sin(beta)
+            ax.plot([x1, x2, x3, x4, x1], [y1, y2, y3, y4, y1], 'r-')
+        return fig, ax
+
 
     def plot(self, color='blue', ax=None):
         """ plot the whole part in 3D """
@@ -712,8 +758,10 @@ def get_parser():
                         help='plot the whole part')
     parser.add_argument('-s', '--save', dest='outfile', action='store',
                         help='specify the path of output file')
-    parser.add_argument('-n', '--neighbor', dest='neighbor_layer_idx',
-            action='store', default=-1, type=int, help='plot nearest neighbor of each element')
+    parser.add_argument('-nei', '--neighbor', dest='neighbor_layer_idx',
+            action='store', default=-1, type=int, help='plot nearest neighbor of each element in one layer')
+    parser.add_argument('-poly', '--polygon', dest='polygon_layer_idx',
+            action='store', default=-1, type=int, help='plot element polygon in one layer')
     return parser
 
 
@@ -770,6 +818,9 @@ def command_line_runner():
     if args.neighbor_layer_idx != -1:
         # gcode_reader.compute_nearest_neighbors()
         fig, ax = gcode_reader.plot_neighbors_layer(layer=args.neighbor_layer_idx)
+
+    if args.polygon_layer_idx != -1:
+        fig, ax = gcode_reader.plot_polygon_layer(layer=args.polygon_layer_idx)
 
     # specify title and x, y label
     if args.plot3d or args.plot_layer_idx or args.mesh_layer_idx:
