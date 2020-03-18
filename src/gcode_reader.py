@@ -68,6 +68,7 @@ DELTA_Z = 2e-5
 
 LASER_POWER = 195
 LASER_SPEED = 0.8
+TRAVEL_SPEED = 0.8
 
 
 def save_figure(fig, filename, dpi):
@@ -231,6 +232,7 @@ class GcodeReader:
         outpath = "{}.scode".format(name)
         old_z = -np.inf
         z = -DELTA_Z
+        old_x0 = old_y0 = old_x1 = old_y1 = -np.inf
         with open(outpath, 'w') as out_f:
             out_f.write('# x1 y1 x2 y2 z power speed \n')
             for x0, y0, x1, y1, cur_z in self.segs:
@@ -238,11 +240,17 @@ class GcodeReader:
                 y0 *= HORIZONTAL_SHRINK_RATIO
                 x1 *= HORIZONTAL_SHRINK_RATIO
                 y1 *= HORIZONTAL_SHRINK_RATIO
+                if old_x0 != -np.inf and (old_x1 != x0 or old_y1 != y0 or cur_z != old_z):
+                    out_f.write("{:.8f} {:.8f} {:.8f} {:.8f} {:.8f} {:d} {:.4f}\n".format(old_x1, old_y1, x0, y0, z, 0, TRAVEL_SPEED))
                 if cur_z > old_z:
                     z += DELTA_Z
                     old_z = cur_z
+                old_x0 = x0
+                old_y0 = y0
+                old_x1 = x1
+                old_y1 = y1
+                # check if two segs are connected
                 out_f.write("{:.8f} {:.8f} {:.8f} {:.8f} {:.8f} {:d} {:.4f}\n".format(x0, y0, x1, y1, z, LASER_POWER, LASER_SPEED))
-                # print(z)
         print('Save path to s-code file {}'.format(outpath))
 
     def plot_mesh(self, ax=None):
@@ -832,7 +840,7 @@ def get_parser():
 
 
 def command_line_runner():
-    """command line runner"""
+    """ command line runner """
     # 1. parse arguments
     parser = get_parser()
     args = parser.parse_args()
