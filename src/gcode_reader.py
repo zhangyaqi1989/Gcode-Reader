@@ -40,8 +40,8 @@ import statistics
 sns.set()  # use seaborn style
 
 # maximum element length in meshing
-# MAX_ELEMENT_LENGTH = 2.5
-MAX_ELEMENT_LENGTH = 50e-6
+MAX_ELEMENT_LENGTH = 2.5
+# MAX_ELEMENT_LENGTH = 50e-6
 
 # PLOT Support
 PLOT_SUPPORT = True
@@ -59,8 +59,8 @@ ZERO_TOLERANCE = 1e-12
 pp = pprint.PrettyPrinter(indent=4)
 
 # plot polygon
-# HALF_WIDTH = 0.6
-HALF_WIDTH = 50e-6
+HALF_WIDTH = 0.6
+# HALF_WIDTH = 50e-6
 
 # current 0.5 mm = 500 mu, target 50 mu
 HORIZONTAL_SHRINK_RATIO = 0.0001
@@ -229,14 +229,20 @@ class GcodeReader:
         """ convert path to scode file. """
         name, _ = self.filename.rsplit('.', 1)
         outpath = "{}.scode".format(name)
+        old_z = -np.inf
+        z = -DELTA_Z
         with open(outpath, 'w') as out_f:
             out_f.write('# x1 y1 x2 y2 z power speed \n')
-            for x0, y0, x1, y1, z in self.segs:
+            for x0, y0, x1, y1, cur_z in self.segs:
                 x0 *= HORIZONTAL_SHRINK_RATIO
                 y0 *= HORIZONTAL_SHRINK_RATIO
                 x1 *= HORIZONTAL_SHRINK_RATIO
                 y1 *= HORIZONTAL_SHRINK_RATIO
+                if cur_z > old_z:
+                    z += DELTA_Z
+                    old_z = cur_z
                 out_f.write("{:.8f} {:.8f} {:.8f} {:.8f} {:.8f} {:d} {:.4f}\n".format(x0, y0, x1, y1, z, LASER_POWER, LASER_SPEED))
+                # print(z)
         print('Save path to s-code file {}'.format(outpath))
 
     def plot_mesh(self, ax=None):
@@ -844,7 +850,8 @@ def command_line_runner():
     gcode_reader = GcodeReader(filename=args.gcode_file, filetype=filetype)
     # 3. print out some statistic information to standard output
     gcode_reader.describe()
-    gcode_reader.describe_mesh(max_length=MAX_ELEMENT_LENGTH)
+    ## describe meshing results
+    # gcode_reader.describe_mesh(max_length=MAX_ELEMENT_LENGTH)
     # 4. plot the whole part or a layer
     if args.plot3d:
         fig, ax = gcode_reader.plot()
