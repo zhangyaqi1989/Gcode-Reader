@@ -12,11 +12,17 @@ It supports the following functionalities
 3. animate the printing of a layer in 2D, animate the printing of layers in 3D
 4. mesh the path, plot mesh, list important informations about the mesh
 5. compute closest left element and right element
+6. shrink and convert FDM process plan to PBF S-Code
 
+TODOs:
+1. add support to filter out the support path (DONE)
+2. merge co-linear segments into one segment
+3. convert one layer of FDM gcode to PBF scode
 
 FINDINGS:
 1. octopus: 0.60 mm half width
 2. tweety:  0.60 mm half width
+3. mobius arm: 1.5 mm half width
 """
 
 # standard library
@@ -40,10 +46,11 @@ import statistics
 sns.set()  # use seaborn style
 
 # maximum element length in meshing
-MAX_ELEMENT_LENGTH = 2.5
-# MAX_ELEMENT_LENGTH = 50e-6
+MAX_ELEMENT_LENGTH = 2.5 # FDM regular
+MAX_ELEMENT_LENGTH = 5 # FDM Stratasys
+# MAX_ELEMENT_LENGTH = 50e-6 # LPBF
 
-# PLOT Support
+# set true to keep support path
 PLOT_SUPPORT = True
 
 # Element namedtuple
@@ -59,10 +66,11 @@ ZERO_TOLERANCE = 1e-12
 pp = pprint.PrettyPrinter(indent=4)
 
 # plot polygon
-HALF_WIDTH = 0.6
+HALF_WIDTH = 0.6 # FDM regular
+HALF_WIDTH = 1.5 # FDM stratasys
 # HALF_WIDTH = 50e-6
 
-# current 0.5 mm = 500 mu, target 50 mu
+# FDM regular: current 0.5 mm = 500 mu, target 50 mu
 HORIZONTAL_SHRINK_RATIO = 0.0001
 DELTA_Z = 2e-5
 
