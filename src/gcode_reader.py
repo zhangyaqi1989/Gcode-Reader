@@ -17,12 +17,13 @@ It supports the following functionalities
 TODOs:
 1. add support to filter out the support path (DONE)
 2. merge co-linear segments into one segment
-3. convert one layer of FDM gcode to PBF scode
+3. convert one layer of FDM gcode to PBF scode (DONE)
 
 FINDINGS:
 1. octopus: 0.60 mm half width
 2. tweety:  0.60 mm half width
 3. mobius arm: 1.5 mm half width
+
 """
 
 # standard library
@@ -71,7 +72,9 @@ HALF_WIDTH = 1.5 # FDM stratasys
 # HALF_WIDTH = 50e-6
 
 # FDM regular: current 0.5 mm = 500 mu, target 50 mu
+# FDM stratasys: current 1.4 mm = 1400 mu, target 50 mu
 HORIZONTAL_SHRINK_RATIO = 0.0001
+HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (1400 / 50))
 DELTA_Z = 2e-5
 
 LASER_POWER = 195
@@ -377,7 +380,15 @@ class GcodeReader:
             lines = (line.strip() for line in infile.readlines()
                      if line.strip())
             # only keep line that starts with 'G1'
-            lines = (line for line in lines if line.startswith('G1'))
+            # lines = (line for line in lines if line.startswith('G1'))
+            new_lines = []
+            for line in lines:
+                if line.startswith('G1'):
+                    idx = line.find(';')
+                    if idx != -1:
+                        line = line[:idx]
+                    new_lines.append(line)
+            lines = new_lines
         # pp.pprint(lines) # for debug
         self.segs = []
         temp = -float('inf')
