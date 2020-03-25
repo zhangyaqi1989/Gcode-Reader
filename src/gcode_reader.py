@@ -23,7 +23,7 @@ FINDINGS:
 1. octopus: 0.60 mm half width
 2. tweety:  0.60 mm half width
 3. mobius arm: 1.5 mm half width
-
+4. bunny: 1.5 mm half width
 """
 
 # standard library
@@ -44,15 +44,20 @@ import pandas as pd
 import seaborn as sns
 import statistics
 
-sns.set()  # use seaborn style
+# sns.set()  # use seaborn style
 
 # maximum element length in meshing
-MAX_ELEMENT_LENGTH = 2.5 # FDM regular
-MAX_ELEMENT_LENGTH = 5 # FDM Stratasys
-# MAX_ELEMENT_LENGTH = 50e-6 # LPBF
+# MAX_ELEMENT_LENGTH = 2.5 # FDM regular
+# MAX_ELEMENT_LENGTH = 5 # FDM Stratasys
+MAX_ELEMENT_LENGTH = 50e-6 # LPBF
+# MAX_ELEMENT_LENGTH = 100e-6 # LPBF (for plot mesh example)
 
 # set true to keep support path
 PLOT_SUPPORT = True
+
+# set true to plot scans with positive power in different color
+PLOT_POWER = True
+POWER_ZERO = 1
 
 # Element namedtuple
 Element = collections.namedtuple('Element', ['x0', 'y0', 'x1', 'y1', 'z'])
@@ -73,8 +78,9 @@ HALF_WIDTH = 1.5 # FDM stratasys
 
 # FDM regular: current 0.5 mm = 500 mu, target 50 mu
 # FDM stratasys: current 1.4 mm = 1400 mu, target 50 mu
-HORIZONTAL_SHRINK_RATIO = 0.0001
-HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (1400 / 50))
+# HORIZONTAL_SHRINK_RATIO = 0.0001 # tweety and octo
+# HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (1400 / 50)) # mobius arm
+HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (1500 / 50)) # bunny
 DELTA_Z = 2e-5
 
 LASER_POWER = 195
@@ -204,10 +210,15 @@ class GcodeReader:
         self.elements_index_bars = []
         bar = 0
         n_eles = 0
+        if not hasattr(self, 'powers'):
+            self.powers = [POWER_ZERO + 10] * len(self.segs)
         for i, (x0, y0, x1, y1, z) in enumerate(self.segs):
             if i == self.seg_index_bars[bar]:
                 bar += 1
                 self.elements_index_bars.append(n_eles)
+            power = self.powers[i]
+            if power < POWER_ZERO:
+                continue
             length = np.hypot(x0 - x1, y0 - y1)
             n_slices = int(np.ceil(length / max_length))
             n_eles += n_slices
@@ -228,11 +239,12 @@ class GcodeReader:
         """ plot mesh in one layer """
         if not self.elements:
             self.mesh(max_length=MAX_ELEMENT_LENGTH)
-        if not ax:
-            fig, ax = create_axis(projection='2d')
+        fig, ax = self.plot_layer(layer=layernum)
+        # if not ax:
+        #    fig, ax = create_axis(projection='2d')
         left, right = self.elements_index_bars[layernum - 1:layernum + 1]
         for x0, y0, x1, y1, _ in self.elements[left:right]:
-            ax.plot([x0, x1], [y0, y1], 'b-')
+            # ax.plot([x0, x1], [y0, y1], 'b-')
             # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
             ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=1.5)
         return fig, ax
@@ -343,6 +355,7 @@ class GcodeReader:
         self.segs = np.array(self.segs)
         self.seg_index_bars.append(self.n_segs)
         # print(self.n_layers)
+        print(self.powers)
         assert(len(self.seg_index_bars) - self.n_layers == 1)
 
     def _read_lpbf_scode(self):
@@ -698,10 +711,20 @@ class GcodeReader:
         self._compute_subpaths()
         if not ax:
             fig, ax = create_axis(projection='2d')
-        left, right = (self.subpath_index_bars[layer - 1],
-                       self.subpath_index_bars[layer])
-        for xs, ys, _ in self.subpaths[left: right]:
-            ax.plot(xs, ys)
+        if not PLOT_POWER:
+            left, right = (self.subpath_index_bars[layer - 1],
+                        self.subpath_index_bars[layer])
+            for xs, ys, _ in self.subpaths[left: right]:
+                ax.plot(xs, ys)
+        else:
+            left, right = (self.seg_index_bars[layer - 1],
+                    self.seg_index_bars[layer])
+            for (x1, y1, x2, y2, z), power in zip(self.segs, self.powers):
+                if power > POWER_ZERO:
+                    ax.plot([x1, x2], [y1, y2], 'r-')
+                else:
+                    ax.plot([x1, x2], [y1, y2], 'b-')
+        ax.axis('equal')
         return fig, ax
 
     def describe_mesh(self, max_length):
