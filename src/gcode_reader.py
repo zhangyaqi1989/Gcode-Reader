@@ -55,6 +55,9 @@ MAX_ELEMENT_LENGTH = 50e-6 # LPBF
 # set true to keep support path
 PLOT_SUPPORT = True
 
+# set true to use one color for plot
+SINGLE_COLOR = True
+
 # set true to plot scans with positive power in different color
 PLOT_POWER = True
 POWER_ZERO = 1
@@ -684,7 +687,10 @@ class GcodeReader:
         assert(self.n_segs > 0)
         self._compute_subpaths()
         for xs, ys, zs in self.subpaths:
-            ax.plot(xs, ys, zs, color=color)
+            if SINGLE_COLOR:
+                ax.plot(xs, ys, zs, color=color)
+            else:
+                ax.plot(xs, ys, zs)
         return fig, ax
 
     def plot_layers(self, min_layer, max_layer, ax=None):
