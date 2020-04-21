@@ -23,7 +23,8 @@ FINDINGS:
 1. octopus: 0.60 mm half width
 2. tweety:  0.60 mm half width
 3. mobius arm: 1.5 mm half width
-4. bunny: 1.5 mm half width
+4. bunny: 0.60 mm half width
+5. wrench: 0.60 mm half width
 """
 
 # standard library
@@ -47,9 +48,9 @@ import statistics
 # sns.set()  # use seaborn style
 
 # maximum element length in meshing
-# MAX_ELEMENT_LENGTH = 2.5 # FDM regular
+MAX_ELEMENT_LENGTH = 2.5 # FDM regular
 # MAX_ELEMENT_LENGTH = 5 # FDM Stratasys
-MAX_ELEMENT_LENGTH = 50e-6 # LPBF
+# MAX_ELEMENT_LENGTH = 50e-6 # LPBF
 # MAX_ELEMENT_LENGTH = 100e-6 # LPBF (for plot mesh example)
 
 # set true to keep support path
@@ -59,14 +60,14 @@ PLOT_SUPPORT = True
 SINGLE_COLOR = True
 
 # set true to plot scans with positive power in different color
-PLOT_POWER = True
+PLOT_POWER = False
 POWER_ZERO = 1
 
 # Element namedtuple
 Element = collections.namedtuple('Element', ['x0', 'y0', 'x1', 'y1', 'z'])
 
 # set true to add axis-label and title
-FIG_INFO = False
+FIG_INFO = True
 
 # zero tolerance for is_left check
 ZERO_TOLERANCE = 1e-12
@@ -76,14 +77,16 @@ pp = pprint.PrettyPrinter(indent=4)
 
 # plot polygon
 HALF_WIDTH = 0.6 # FDM regular
-HALF_WIDTH = 1.5 # FDM stratasys
+# HALF_WIDTH = 1.5 # FDM stratasys
 # HALF_WIDTH = 50e-6
 
 # FDM regular: current 0.5 mm = 500 mu, target 50 mu
 # FDM stratasys: current 1.4 mm = 1400 mu, target 50 mu
 # HORIZONTAL_SHRINK_RATIO = 0.0001 # tweety and octo
 # HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (1400 / 50)) # mobius arm
-HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (1500 / 50)) # bunny
+# HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (1500 / 50)) # bunny
+# HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (600 / 25)) # bunny
+HORIZONTAL_SHRINK_RATIO = (1 / 1000) * (1 / (600 / 25)) # wrench
 DELTA_Z = 2e-5
 
 LASER_POWER = 195
@@ -246,6 +249,7 @@ class GcodeReader:
         # if not ax:
         #    fig, ax = create_axis(projection='2d')
         left, right = self.elements_index_bars[layernum - 1:layernum + 1]
+        print(left, right)
         for x0, y0, x1, y1, _ in self.elements[left:right]:
             # ax.plot([x0, x1], [y0, y1], 'b-')
             # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
@@ -572,6 +576,7 @@ class GcodeReader:
         INF = math.inf
         left_neis = []
         right_neis = []
+        print(start_idx, end_idx)
         for i in range(start_idx, end_idx):
             left_mn = INF
             right_mn = INF
@@ -601,15 +606,17 @@ class GcodeReader:
             # if left_mn > 5:
             left_neis.append((left_idx, left_mn))
             right_neis.append((right_idx, right_mn))
+        print("Finished computing left and right neighbors.")
         return left_neis, right_neis
 
 
     def plot_neighbors_layer(self, layer=0):
         """plot neighbors in a layer."""
         left_neis, right_neis = self.compute_nearest_neighbors(layer)
+        #"""
         fig, ax = self.plot_mesh_layer(layer)
         left, right = self.elements_index_bars[layer - 1:layer + 1]
-        # print(left, right)
+        print(left, right)
         es = self.elements
         for idx, (x0, y0, x1, y1, _) in enumerate(self.elements[left:right]):
             xc = 0.5 * (x0 + x1)
@@ -627,6 +634,7 @@ class GcodeReader:
                 ry = 0.5 * (es[right_idx].y0 + es[right_idx].y1)
                 # print(left_mn, math.sqrt((lx - xc) ** 2 + (ly - yc) ** 2),self._compute_parallel_distance(idx, left_idx))
                 ax.plot([xc, rx], [yc, ry], 'r-')
+        #"""
         # plot histogram
         left_mns = [mn for idx, mn in left_neis if idx != -1]
         print("left median = {}".format(statistics.median(left_mns)))
@@ -640,7 +648,8 @@ class GcodeReader:
         print("right max = {}".format(max(right_mns)))
         fig2, ax2 = plt.subplots(figsize=(8, 8))
         ax2.boxplot(left_mns)
-        return fig, ax
+        # return fig, ax
+        return fig2, ax2
 
     def plot_polygon_layer(self, layer):
         """plot element polygons in one layer. """
