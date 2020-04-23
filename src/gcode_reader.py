@@ -57,7 +57,7 @@ MAX_ELEMENT_LENGTH = 2.5 # FDM regular
 PLOT_SUPPORT = True
 
 # set true to use one color for plot
-SINGLE_COLOR = True
+SINGLE_COLOR = False
 
 # set true to plot scans with positive power in different color
 PLOT_POWER = False
@@ -67,7 +67,7 @@ POWER_ZERO = 1
 Element = collections.namedtuple('Element', ['x0', 'y0', 'x1', 'y1', 'z'])
 
 # set true to add axis-label and title
-FIG_INFO = True
+FIG_INFO = False
 
 # zero tolerance for is_left check
 ZERO_TOLERANCE = 1e-12
@@ -92,6 +92,15 @@ DELTA_Z = 2e-5
 LASER_POWER = 195
 LASER_SPEED = 0.8
 TRAVEL_SPEED = 0.8
+
+def axisEqual3D(ax):
+    extents = np.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
+    sz = extents[:,1] - extents[:,0]
+    centers = np.mean(extents, axis=1)
+    maxsize = max(abs(sz))
+    r = maxsize/4
+    for ctr, dim in zip(centers, 'xyz'):
+        getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
 
 def save_figure(fig, filename, dpi):
@@ -957,6 +966,9 @@ def command_line_runner():
 
     # specify title and x, y label
     if args.plot3d or args.plot_layer_idx or args.mesh_layer_idx:
+        # ax.set_aspect('equal') # not implemented
+        if args.plot3d:
+            axisEqual3D(ax)
         if FIG_INFO:
             _, filename = args.gcode_file.rsplit(os.path.sep, 1)
             ax.set_title(filename)
