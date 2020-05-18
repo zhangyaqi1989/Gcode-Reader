@@ -48,20 +48,23 @@ import statistics
 # sns.set()  # use seaborn style
 
 # maximum element length in meshing
-MAX_ELEMENT_LENGTH = 2.5 # FDM regular
+# MAX_ELEMENT_LENGTH = 1 # FDM regular
 # MAX_ELEMENT_LENGTH = 5 # FDM Stratasys
+# MAX_ELEMENT_LENGTH = 10 # four-spirals scode
 # MAX_ELEMENT_LENGTH = 50e-6 # LPBF
-# MAX_ELEMENT_LENGTH = 100e-6 # LPBF (for plot mesh example)
+MAX_ELEMENT_LENGTH = 100e-6 # LPBF (for plot mesh example)
 
 # set true to keep support path
 PLOT_SUPPORT = True
 
 # set true to use one color for plot
-SINGLE_COLOR = False
+# set false to use random color for plot
+SINGLE_COLOR = True
 
 # set true to plot scans with positive power in different color
-PLOT_POWER = False
+PLOT_POWER = True
 POWER_ZERO = 1
+IGNORE_ZERO_POWER = True
 
 # Element namedtuple
 Element = collections.namedtuple('Element', ['x0', 'y0', 'x1', 'y1', 'z'])
@@ -262,7 +265,7 @@ class GcodeReader:
         for x0, y0, x1, y1, _ in self.elements[left:right]:
             # ax.plot([x0, x1], [y0, y1], 'b-')
             # ax.scatter(0.5 * (x0 + x1), 0.5 * (y0 + y1), s=4, color='r')
-            ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=1.5)
+            ax.plot([0.5 * (x0 + x1)], [0.5 * (y0 + y1)], 'ro', markersize=4)
         return fig, ax
 
     def convert_to_scode(self):
@@ -739,7 +742,12 @@ class GcodeReader:
             left, right = (self.subpath_index_bars[layer - 1],
                         self.subpath_index_bars[layer])
             for xs, ys, _ in self.subpaths[left: right]:
-                ax.plot(xs, ys)
+                if SINGLE_COLOR:
+                    if (IGNORE_ZERO_POWER and power > POWER_ZERO) or (not IGNORE_ZERO_POWER):
+                        ax.plot(xs, ys, color='blue')
+                else:
+                    if (IGNORE_ZERO_POWER and power > POWER_ZERO) or (not IGNORE_ZERO_POWER):
+                        ax.plot(xs, ys)
         else:
             left, right = (self.seg_index_bars[layer - 1],
                     self.seg_index_bars[layer])
@@ -747,7 +755,8 @@ class GcodeReader:
                 if power > POWER_ZERO:
                     ax.plot([x1, x2], [y1, y2], 'r-')
                 else:
-                    ax.plot([x1, x2], [y1, y2], 'b-')
+                    if not IGNORE_ZERO_POWER:
+                        ax.plot([x1, x2], [y1, y2], 'b-')
         ax.axis('equal')
         return fig, ax
 
