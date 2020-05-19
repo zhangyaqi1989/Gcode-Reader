@@ -59,7 +59,7 @@ PLOT_SUPPORT = True
 
 # set true to use one color for plot
 # set false to use random color for plot
-SINGLE_COLOR = True
+SINGLE_COLOR = False
 
 # set true to plot scans with positive power in different color
 PLOT_POWER = True
@@ -161,7 +161,7 @@ def create_movie_writer(title='Movie Writer', fps=15):
     return writer
 
 
-def add_margin_to_axis_limits(min_v, max_v, margin_ratio=0.1):
+def add_margin_to_axis_limits(min_v, max_v, margin_ratio=0.2):
     """
     compute new min_v and max_v based on margin
 
@@ -374,7 +374,7 @@ class GcodeReader:
         self.segs = np.array(self.segs)
         self.seg_index_bars.append(self.n_segs)
         # print(self.n_layers)
-        print(self.powers)
+        # print(self.powers)
         assert(len(self.seg_index_bars) - self.n_layers == 1)
 
     def _read_lpbf_scode(self):
@@ -401,7 +401,7 @@ class GcodeReader:
             seg_count += 1
         self.n_segs = len(self.segs)
         self.segs = np.array(self.segs)
-        print(self.segs)
+        # print(self.segs)
         self.seg_index_bars.append(self.n_segs)
         assert(len(self.seg_index_bars) - self.n_layers == 1)
 
@@ -427,11 +427,16 @@ class GcodeReader:
         gxyzef = [temp, temp, temp, temp, temp, temp]
         d = dict(zip(['G', 'X', 'Y', 'Z', 'E', 'F'], range(6)))
         seg_count = 0
+        mx_z = -math.inf
         for line in lines:
             old_gxyzef = gxyzef[:]
             for token in line.split():
                 gxyzef[d[token[0]]] = float(token[1:])
-            if gxyzef[3] > old_gxyzef[3]:  # z value
+            # if gxyzef[3] > old_gxyzef[3]:  # z value
+            # it may lift z in the beginning or during the printing process
+            if gxyzef[4] > old_gxyzef[4] and gxyzef[3] > mx_z:
+                mx_z = gxyzef[3]
+                # print(gxyzef[3], old_gxyzef[3])
                 self.n_layers += 1
                 self.seg_index_bars.append(seg_count)
             if (gxyzef[0] == 1 and gxyzef[1:3] != old_gxyzef[1:3]
@@ -506,10 +511,13 @@ class GcodeReader:
             self.subpath_index_bars = [0]
             x0, y0, x1, y1, z = self.segs[0, :]
             xs, ys, zs = [x0, x1], [y0, y1], [z, z]
+            mx_z = zs[-1]
             for x0, y0, x1, y1, z in self.segs[1:, :]:
                 if x0 != xs[-1] or y0 != ys[-1] or z != zs[-1]:
                     self.subpaths.append((xs, ys, zs))
-                    if z != zs[-1]:
+                    # if z != zs[-1]:
+                    if z > mx_z:
+                        mx_z = z
                         self.subpath_index_bars.append(len(self.subpaths))
                     xs, ys, zs = [x0, x1], [y0, y1], [z, z]
                 else:
@@ -791,6 +799,15 @@ class GcodeReader:
         self._compute_subpaths()
         # print(len(self.seg_index_bars))
         # print(len(self.subpath_index_bars))
+        assert(len(self.seg_index_bars) == len(self.subpath_index_bars))
+        """
+        try:
+            assert(len(self.seg_index_bars) == len(self.subpath_index_bars))
+        except:
+            print(len(self.seg_index_bars))
+            print(len(self.subpath_index_bars))
+            print(self.n_layers)
+        """
         data = {'# segments': np.array(self.seg_index_bars[1:]) -
                 np.array(self.seg_index_bars[:-1]),
                 'layer': np.arange(1, self.n_layers + 1),
