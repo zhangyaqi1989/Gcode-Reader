@@ -76,6 +76,7 @@ HALF_WIDTH = 0.6 # FDM regular
 # HALF_WIDTH = 1.5 # FDM stratasys
 # HALF_WIDTH = 50e-6
 
+## This is for research...
 # FDM regular: current 0.5 mm = 500 mu, target 50 mu
 # FDM stratasys: current 1.4 mm = 1400 mu, target 50 mu
 # HORIZONTAL_SHRINK_RATIO = 0.0001 # tweety and octo
@@ -854,6 +855,15 @@ class GcodeReader:
         # ax.set_ylim([ymin, ymax])
         ax.set_xlim(add_margin_to_axis_limits(xmin, xmax))
         ax.set_ylim(add_margin_to_axis_limits(ymin, ymax))
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_title("{:s}(layer = {:d})".format(self.filename, layer))
+        if not FIG_INFO:
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.axis('off')
+            ax.set_title("")
+        # ax.set_title(self.fila)
         left, right = (self.seg_index_bars[layer - 1],
                        self.seg_index_bars[layer])
         seg_lst = self.segs[left: right]
@@ -923,10 +933,11 @@ def get_parser():
                         type=int, help='plot the mesh of a layer in 2D')
     parser.add_argument('-p', '--plot', dest='plot3d', action='store_true',
                         help='plot the whole part')
-    parser.add_argument('-conv', '--convert', dest='convert', action='store_true', 
-                        help='convert FDM path to LPBF scode.')
     parser.add_argument('-s', '--save', dest='outfile', action='store',
                         help='specify the path of output file')
+    ### below part is in construction
+    parser.add_argument('-conv', '--convert', dest='convert', action='store_true', 
+            help='convert FDM path to LPBF scode.')
     parser.add_argument('-nei', '--neighbor', dest='neighbor_layer_idx',
             action='store', default=-1, type=int, help='plot nearest neighbor of each element in one layer')
     parser.add_argument('-poly', '--polygon', dest='polygon_layer_idx',
