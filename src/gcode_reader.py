@@ -62,7 +62,8 @@ PLOT_SUPPORT = True
 SINGLE_COLOR = False
 
 # set true to plot scans with positive power in different color
-PLOT_POWER = True
+# this is for PBF gcode
+PLOT_POWER = False
 POWER_ZERO = 1
 IGNORE_ZERO_POWER = True
 
@@ -71,6 +72,9 @@ Element = collections.namedtuple('Element', ['x0', 'y0', 'x1', 'y1', 'z'])
 
 # set true to add axis-label and title
 FIG_INFO = False
+
+# MARGIN RATIO
+MARGIN_RATIO = 0.2
 
 # zero tolerance for is_left check
 ZERO_TOLERANCE = 1e-12
@@ -161,7 +165,7 @@ def create_movie_writer(title='Movie Writer', fps=15):
     return writer
 
 
-def add_margin_to_axis_limits(min_v, max_v, margin_ratio=0.2):
+def add_margin_to_axis_limits(min_v, max_v, margin_ratio=MARGIN_RATIO):
     """
     compute new min_v and max_v based on margin
 
@@ -720,6 +724,11 @@ class GcodeReader:
                 ax.plot(xs, ys, zs, color=color)
             else:
                 ax.plot(xs, ys, zs)
+        xmin, xmax, ymin, ymax, _, _ = self.xyzlimits
+        # ax.set_xlim([xmin, xmax])
+        # ax.set_ylim([ymin, ymax])
+        ax.set_xlim(add_margin_to_axis_limits(xmin, xmax))
+        ax.set_ylim(add_margin_to_axis_limits(ymin, ymax))
         return fig, ax
 
     def plot_layers(self, min_layer, max_layer, ax=None):
@@ -744,18 +753,23 @@ class GcodeReader:
         if layer < 1 or layer > self.n_layers:
             raise LayerError("Layer number is invalid!")
         self._compute_subpaths()
+        if not hasattr(self, 'powers'):
+            self.powers = [POWER_ZERO + 10] * len(self.segs)
         if not ax:
             fig, ax = create_axis(projection='2d')
         if not PLOT_POWER:
             left, right = (self.subpath_index_bars[layer - 1],
                         self.subpath_index_bars[layer])
             for xs, ys, _ in self.subpaths[left: right]:
+                ax.plot(xs, ys)
+                """
                 if SINGLE_COLOR:
                     if (IGNORE_ZERO_POWER and power > POWER_ZERO) or (not IGNORE_ZERO_POWER):
                         ax.plot(xs, ys, color='blue')
                 else:
                     if (IGNORE_ZERO_POWER and power > POWER_ZERO) or (not IGNORE_ZERO_POWER):
                         ax.plot(xs, ys)
+                """
         else:
             left, right = (self.seg_index_bars[layer - 1],
                     self.seg_index_bars[layer])
