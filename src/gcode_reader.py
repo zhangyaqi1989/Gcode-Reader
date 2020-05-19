@@ -48,11 +48,11 @@ import statistics
 # sns.set()  # use seaborn style
 
 # maximum element length in meshing
-# MAX_ELEMENT_LENGTH = 1 # FDM regular
+MAX_ELEMENT_LENGTH = 1 # FDM regular
 # MAX_ELEMENT_LENGTH = 5 # FDM Stratasys
 # MAX_ELEMENT_LENGTH = 10 # four-spirals scode
 # MAX_ELEMENT_LENGTH = 50e-6 # LPBF
-MAX_ELEMENT_LENGTH = 100e-6 # LPBF (for plot mesh example)
+# MAX_ELEMENT_LENGTH = 100e-6 # LPBF (for plot mesh example)
 
 # set true to keep support path
 PLOT_SUPPORT = True
