@@ -13,18 +13,6 @@ It supports the following functionalities
 4. mesh the path, plot mesh, list important informations about the mesh
 5. compute closest left element and right element
 6. shrink and convert FDM process plan to PBF S-Code
-
-TODOs:
-1. add support to filter out the support path (DONE)
-2. merge co-linear segments into one segment
-3. convert one layer of FDM gcode to PBF scode (DONE)
-
-FINDINGS:
-1. octopus: 0.60 mm half width
-2. tweety:  0.60 mm half width
-3. mobius arm: 1.5 mm half width
-4. bunny: 0.60 mm half width
-5. wrench: 0.60 mm half width
 """
 
 # standard library
@@ -34,7 +22,9 @@ from enum import Enum
 import math
 import os.path
 import pprint
+import statistics
 import sys
+
 
 # third party library
 import numpy as np
@@ -43,7 +33,6 @@ import matplotlib.animation as manimation
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 import seaborn as sns
-import statistics
 
 # sns.set()  # use seaborn style
 
