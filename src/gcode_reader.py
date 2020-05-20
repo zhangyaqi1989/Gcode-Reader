@@ -404,11 +404,11 @@ class GcodeReader:
             # read nonempty lines
             lines = (line.strip() for line in infile.readlines()
                      if line.strip())
-            # only keep line that starts with 'G1'
-            # lines = (line for line in lines if line.startswith('G1'))
+            # only keep line that starts with 'G'
+            # lines = (line for line in lines if line.startswith('G'))
             new_lines = []
             for line in lines:
-                if line.startswith('G1'):
+                if line.startswith('G'):
                     idx = line.find(';')
                     if idx != -1:
                         line = line[:idx]
@@ -425,6 +425,7 @@ class GcodeReader:
             old_gxyzef = gxyzef[:]
             for token in line.split():
                 gxyzef[d[token[0]]] = float(token[1:])
+            """
             # if gxyzef[3] > old_gxyzef[3]:  # z value
             # it may lift z in the beginning or during the printing process
             if gxyzef[4] > old_gxyzef[4] and gxyzef[3] > mx_z:
@@ -432,9 +433,16 @@ class GcodeReader:
                 # print(gxyzef[3], old_gxyzef[3])
                 self.n_layers += 1
                 self.seg_index_bars.append(seg_count)
+            """
             if (gxyzef[0] == 1 and gxyzef[1:3] != old_gxyzef[1:3]
                     and gxyzef[3] == old_gxyzef[3]
                     and gxyzef[4] > old_gxyzef[4]):
+                # update layer here
+                # print(gxyzef[3], mx_z)
+                if gxyzef[3] > mx_z:
+                    mx_z = gxyzef[3]
+                    self.n_layers += 1
+                    self.seg_index_bars.append(seg_count)
                 x0, y0, z = old_gxyzef[1:4]
                 x1, y1 = gxyzef[1:3]
                 self.segs.append((x0, y0, x1, y1, z))
@@ -800,8 +808,6 @@ class GcodeReader:
         print(self.summary)
         print('2. Number of layers: {:d}'.format(self.n_layers))
         self._compute_subpaths()
-        # print(len(self.seg_index_bars))
-        # print(len(self.subpath_index_bars))
         assert(len(self.seg_index_bars) == len(self.subpath_index_bars))
         """
         try:
