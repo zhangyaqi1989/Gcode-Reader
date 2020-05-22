@@ -51,8 +51,8 @@ PLOT_SUPPORT = True
 SINGLE_COLOR = False
 
 # set true to plot scans with positive power in different color
-# this is for PBF gcode
-PLOT_POWER = False
+# this is for powder bed fusion
+PLOT_POWER = True
 POWER_ZERO = 1
 IGNORE_ZERO_POWER = True
 
