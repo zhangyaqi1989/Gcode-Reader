@@ -5,7 +5,7 @@
 # Author: Yaqi Zhang
 ##################################
 # This module contains code to plot
-# scode file
+# PBF scode file
 ##################################
 
 # standard library

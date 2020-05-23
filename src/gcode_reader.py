@@ -11,6 +11,8 @@ It supports the following functionalities
 2. list important information of path
 3. animate the printing of a layer in 2D, animate the printing of layers in 3D
 4. mesh the path, plot mesh, list important informations about the mesh
+
+## below two features are under construction
 5. compute closest left element and right element
 6. shrink and convert FDM process plan to PBF S-Code
 """
@@ -71,6 +73,7 @@ ZERO_TOLERANCE = 1e-12
 # global variables
 pp = pprint.PrettyPrinter(indent=4)
 
+### under construction
 # plot polygon
 HALF_WIDTH = 0.6 # FDM regular
 # HALF_WIDTH = 1.5 # FDM stratasys
@@ -90,7 +93,9 @@ LASER_POWER = 195
 LASER_SPEED = 0.8
 TRAVEL_SPEED = 0.8
 
+
 def axisEqual3D(ax):
+    """set 3d axis equal."""
     extents = np.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
     sz = extents[:,1] - extents[:,0]
     centers = np.mean(extents, axis=1)
@@ -942,12 +947,14 @@ def get_parser():
     parser.add_argument('-s', '--save', dest='outfile', action='store',
                         help='specify the path of output file')
     ### below part is in construction
+    #"""
     parser.add_argument('-conv', '--convert', dest='convert', action='store_true', 
-            help='convert FDM path to LPBF scode.')
+            help='convert FDM path to LPBF scode')
     parser.add_argument('-nei', '--neighbor', dest='neighbor_layer_idx',
             action='store', default=-1, type=int, help='plot nearest neighbor of each element in one layer')
     parser.add_argument('-poly', '--polygon', dest='polygon_layer_idx',
             action='store', default=-1, type=int, help='plot element polygon in one layer')
+    #"""
     return parser
 
 
@@ -967,12 +974,17 @@ def command_line_runner():
         sys.exit(1)
     else:
         filetype = GcodeType(args.filetype)
+    # construct Gcode Reader object
     gcode_reader = GcodeReader(filename=args.gcode_file, filetype=filetype)
+
     # 3. print out some statistic information to standard output
     gcode_reader.describe()
+
     ## describe meshing results
     # gcode_reader.describe_mesh(max_length=MAX_ELEMENT_LENGTH)
-    # 4. plot the whole part or a layer
+
+    # 4. plot the part in 3D, plot a layer in 2D, animate the printing process
+    # of single layer in 2D, mesh and plot a layer in 2D
     if args.plot3d:
         fig, ax = gcode_reader.plot()
     else:
@@ -980,39 +992,25 @@ def command_line_runner():
             fig, ax = gcode_reader.plot_layer(layer=args.plot_layer_idx)
         elif args.ani_layer_idx:
             gcode_reader.animate_layer(layer=args.ani_layer_idx)
-            # outfile='../movies/tweety_layer1.mp4')
         elif args.mesh_layer_idx:
-            # print("Plot MESHING")
             fig, ax = gcode_reader.plot_mesh_layer(layernum=args.mesh_layer_idx)
 
+    ## Below part is under construction
+    # 5. convert FDM G-Code to PBF S-Code
     if args.convert:
         gcode_reader.convert_to_scode()
-    # 5. test mesh
-    # gcode_reader.mesh(max_length=MAX_ELEMENT_LENGTH)
-    # print(len(gcode_reader.elements))
-    # gcode_reader.plot_mesh()
-    # fig, ax = gcode_reader.plot_mesh_layer(1)
 
-    # test animation (this is outdated)
-    # gcode_reader.animate_layers(min_layer=1, max_layer=10,
-    #        outfile='../movies/arm.mp4')
-    # gcode_reader.animate_layers(min_layer=1, max_layer=None,
-    #        outfile='../movies/arm-whole.mp4')
-    # gcode_reader.animate_layer(layer=1, animation_time=5)
-    # fig, ax = gcode_reader.plot_layers(min_layer=1, max_layer=4)
-    # ax.set_zlim([0, gcode_reader.xyzlimits[-1]])
-    # gcode_reader.plot()
-
+    # 6. plot contact graph in 2D
     if args.neighbor_layer_idx != -1:
         # gcode_reader.compute_nearest_neighbors()
         fig, ax = gcode_reader.plot_neighbors_layer(layer=args.neighbor_layer_idx)
 
+    # 7. plot mesh (representing elements using polygons)
     if args.polygon_layer_idx != -1:
         fig, ax = gcode_reader.plot_polygon_layer(layer=args.polygon_layer_idx)
 
-    # specify title and x, y label
+    # specify title and x, y label, set axis
     if args.plot3d or args.plot_layer_idx or args.mesh_layer_idx:
-        # ax.set_aspect('equal') # not implemented
         if args.plot3d:
             axisEqual3D(ax)
         if FIG_INFO:
@@ -1026,8 +1024,8 @@ def command_line_runner():
             ax.set_xticks([])
             ax.set_yticks([])
             ax.axis('off')
-        # ax.axis('equal')
 
+    # save figure to file
     if args.outfile:
         save_figure(fig, args.outfile, dpi=100)
     plt.show()
