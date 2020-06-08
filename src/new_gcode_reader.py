@@ -32,6 +32,15 @@ class LayerValueError(Exception):
     pass
 
 
+class GcodeType(Enum):
+    """ enum of GcodeType """
+
+    FDM_REGULAR = 1
+    FDM_STRATASYS = 2
+    LPBF_REGULAR = 3
+    LPBF_SCODE = 4
+
+
 def save_figure(fig, filename, dpi=100):
     """save figure to a file."""
     _, ext = filename.rsplit('.', 1)
@@ -76,7 +85,7 @@ def get_parser():
     group.add_argument("-p", "--plot", action="store_true", help='plot the part')
     group.add_argument("-a", "--animate", action="store_true", help='animate the printing process')
     group.add_argument("-m", "--mesh", action="store_true", help='plot the meshing of the path')
-    parser.add_argument('-s', '--save', dest='out_file', type=str, default='temp.png',
+    parser.add_argument('-s', '--save', dest='out_file', type=str,
             action='store', help='path of output file')
     return parser
 
@@ -89,10 +98,68 @@ def command_line_runner():
 
     print(type(args.file_type))
     print(type(args.low_layer), type(args.high_layer))
+    print(args.gcode_file)
     print(args.plot, args.animate, args.mesh)
-    print(args.out_file)
+    print(args.out_file) # if not set, args.out_file is None
 
-    # 2. run code
+    # 2. run code based on args
+    gcode_reader = GcodeReader(args.gcode_file, args.file_type)
+    if args.plot:
+        fig, ax = gcode_reader.plot(low_layer=args.low_layer, high_layer=args.high_layer)
+    if args.mesh:
+        fig, ax = gcode_reader.mesh(low_layer=args.low_layer, high_layer=args.high_layer)
+    if args.animate:
+        fig, ax = gcode_reader.animate(low_layer=args.low_layer, high_layer=args.high_layer)
+
+
+class GcodeReader:
+    """GCode Reader."""
+
+    def __init__(self, gcode_file, file_type):
+        self.gcode_file = gcode_file
+        self.file_type = GcodeType(file_type)
+        self._read_gcode()
+
+    def _read_gcode(self):
+        """read G-Code file based on file_type."""
+        if self.file_type == GcodeType.FDM_REGULAR:
+            self._read_fdm_regular()
+        elif self.file_type == GcodeType.FDM_STRATASYS:
+            self._read_fdm_stratasys()
+        elif self.file_type == GcodeType.LPBF_REGULAR:
+            self._read_lpbf_regular()
+        elif self.file_type == GcodeType.LPBF_SCODE:
+            self._read_lpbf_scode()
+        else:
+            assert False, f"Unsupport file type {self.file_type}."
+
+    def _read_fdm_regular(self):
+        pass
+
+    def _read_fdm_stratasys(self):
+        pass
+
+    def _read_lpbf_regular(self):
+        pass
+
+    def _read_lpbf_scode(self):
+        pass
+
+    def plot(self, low_layer, high_layer):
+        """plot part from low_layer to high_layer."""
+        print(f"Plot part from {low_layer} to {high_layer}.")
+        return None, None
+
+    def mesh(self, low_layer, high_layer):
+        """mesh the part and plot the mesh from low_layer to high_layer."""
+        print(f"Plot meshing of part from {low_layer} to {high_layer}.")
+        return None, None
+
+    def animate(self, low_layer, high_layer):
+        """animate the printing of part from low_layer to high_layer."""
+        print(f"Animate printing of part from {low_layer} to {high_layer}.")
+        return None, None
+
 
 if __name__ == "__main__":
     command_line_runner()
